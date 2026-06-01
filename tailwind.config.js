@@ -40,12 +40,19 @@ module.exports = {
           foreground: "hsl(var(--card-foreground))",
         },
         medical: {
-          primary: '#1e40af', // Azul médico confianza
-          secondary: '#3b82f6',
-          success: '#10b981', // Verde salud
-          danger: '#ef4444',
-          light: '#f8fafc',
-          dark: '#1e293b',
+          primary: "#454c92", // Violeta (branding, CTAs)
+          primaryDark: "#4b6a87", // Hover / activo
+          secondary: "#e8f9f8", // Fondo suave celeste agua (hovers/filas/badges)
+          surface: "#F9FAFB", // Fondo general limpio
+          card: "#FFFFFF", // Tarjetas y contenedores
+          border: "#cbeeed", // Bordes sutiles celeste agua
+          text: "#0F172A", // Titulos y texto principal (casi negro)
+          mutedText: "#64748B", // Texto secundario
+          accent: "#73d4cd", // Celeste 1 (acento suave)
+          accentDark: "#97c1bf", // Celeste 2 (hover acento)
+          success: "#16A34A", // Estados positivos
+          warning: "#F59E0B", // Alertas medias
+          danger: "#DC2626", // Alertas criticas
         }
       },
       borderRadius: {

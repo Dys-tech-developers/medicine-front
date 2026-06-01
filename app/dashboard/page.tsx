@@ -1,51 +1,37 @@
 "use client";
 
-import Link from "next/link";
+import { BarChart3 } from "lucide-react";
+import { AdminSidebar } from "@/components/dashboard/AdminSidebar";
+import { LogoutLink } from "@/components/auth/LogoutLink";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function DashboardPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <Link
-              href="/login"
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 font-medium"
-            >
-              Cerrar Sesión
-            </Link>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-medical-surface md:flex">
+      <AdminSidebar />
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto py-12 px-6">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Métricas Cards */}
-          <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Pacientes Totales</h3>
-            <p className="text-3xl font-bold text-gray-900">1,234</p>
-          </div>
-          <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Citas Hoy</h3>
-            <p className="text-3xl font-bold text-indigo-600">56</p>
-          </div>
-          <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Alertas</h3>
-            <p className="text-3xl font-bold text-red-600">3</p>
-          </div>
-
-          {/* Gráficos Placeholder */}
-          <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-200 sm:col-span-2">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Gráfico de Tendencias</h3>
-            <div className="h-64 bg-gray-100 rounded-md flex items-center justify-center">
-              <p className="text-gray-500">Placeholder para gráfico</p>
+      <main className="flex-1">
+        <div className="border-b border-medical-border bg-medical-card px-6 py-4">
+          <div className="mx-auto max-w-7xl">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-medical-text">Dashboard</h1>
+              <LogoutLink className="rounded-md bg-medical-primary px-4 py-2 font-medium text-white hover:bg-medical-primaryDark disabled:opacity-70">
+                Cerrar Sesión
+              </LogoutLink>
             </div>
           </div>
         </div>
-      </div>
+
+        <div className="mx-auto max-w-7xl px-6 py-12">
+          <div className="overflow-hidden rounded-xl border border-medical-border bg-medical-card shadow-sm">
+            <EmptyState
+              icon={BarChart3}
+              title="Sin métricas disponibles"
+              description="Los indicadores y gráficos del panel se mostrarán acá cuando el backend exponga los datos."
+            />
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
