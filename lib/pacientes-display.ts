@@ -2,12 +2,13 @@ import type { PacienteDto, PacienteListItemDto } from "@/lib/api/types";
 import { calculateAgeFromBirthDate } from "@/lib/patient-qr";
 
 type PacienteLike = PacienteListItemDto | PacienteDto;
+type PacienteNombreLike = Pick<PacienteLike, "nombre" | "apellido">;
 
-export function getPacienteNombre(paciente: PacienteLike): string {
+export function getPacienteNombre(paciente: PacienteNombreLike): string {
   return `${paciente.nombre} ${paciente.apellido}`.trim();
 }
 
-export function getPacienteInitials(paciente: PacienteLike): string {
+export function getPacienteInitials(paciente: PacienteNombreLike): string {
   return [paciente.nombre, paciente.apellido]
     .filter(Boolean)
     .map((w) => w[0])
