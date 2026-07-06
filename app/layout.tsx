@@ -8,12 +8,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DYS Medicine",
-  description: "DYS Medicine",
+  title: "SIMEC",
+  description: "SIMEC — Plataforma de gestión médica",
   icons: {
-    icon: [{ url: "/estetoscopio.png", type: "image/png" }],
-    apple: "/estetoscopio.png",
-    shortcut: "/estetoscopio.png",
+    icon: [{ url: "/simeclogo1.png", type: "image/png" }],
+    apple: "/simeclogo1.png",
+    shortcut: "/simeclogo1.png",
   },
 };
 

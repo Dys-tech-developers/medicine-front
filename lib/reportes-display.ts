@@ -6,6 +6,34 @@ export const REPORTE_PERIODO_LABELS: Record<ReportePeriodo, string> = {
   mensual: "Este mes",
 };
 
+export function getReporteVisitaPacienteInitials(nombre: string, apellido: string): string {
+  return [nombre, apellido]
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export function formatReporteVisitaFecha(iso: string): { fecha: string; hora: string } {
+  try {
+    const d = new Date(iso);
+    return {
+      fecha: d.toLocaleDateString("es-AR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }),
+      hora: d.toLocaleTimeString("es-AR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+  } catch {
+    return { fecha: "—", hora: "" };
+  }
+}
+
 export function formatReporteMonto(value: string | number | null | undefined): string {
   if (value == null || value === "") return "—";
   const n = typeof value === "string" ? Number.parseFloat(value) : value;

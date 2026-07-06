@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { SimecLogo } from "@/components/brand/SimecLogo";
 import {
   ArrowRight,
   Eye,
   EyeOff,
   Loader2,
   Lock,
-  Stethoscope,
 } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
@@ -100,19 +100,19 @@ export default function LoginPage() {
             className="absolute inset-0 bg-cover bg-no-repeat"
             style={{
               backgroundImage:
-                "url('./portadamed.png')",
+                "url('./portadasalud.png')",
             }}
           />
-  
+
         </aside>
 
         {/* ── RIGHT PANEL ────────────────────────────────────────────── */}
         <main className="relative flex flex-1 items-center justify-center overflow-hidden bg-white px-6 py-10 sm:px-10">
 
           {/* ── Iconos decorativos de fondo ── */}
-          <i className="icon-[tabler--stethoscope]    pointer-events-none absolute -top-5 -left-5   text-[130px] text-medical-mutedText/25  rotate-12"  aria-hidden="true" />
+          <i className="icon-[tabler--stethoscope]    pointer-events-none absolute -top-5 -left-5   text-[130px] text-medical-mutedText/25  rotate-12" aria-hidden="true" />
           <i className="icon-[tabler--pill]            pointer-events-none absolute top-28  left-10   text-[64px]  text-medical-accent/20 -rotate-20" aria-hidden="true" />
-          <i className="icon-[tabler--heart]           pointer-events-none absolute top-10  right-6   text-[72px]  text-medical-primary/12 rotate-6"  aria-hidden="true" />
+          <i className="icon-[tabler--heart]           pointer-events-none absolute top-10  right-6   text-[72px]  text-medical-primary/12 rotate-6" aria-hidden="true" />
           <i className="icon-[tabler--microscope]      pointer-events-none absolute top-1/3 -right-6  text-[96px]  text-medical-mutedText/20  rotate-45" aria-hidden="true" />
           <i className="icon-[tabler--activity-heartbeat] pointer-events-none absolute top-1/2 left-4 text-[58px]  text-medical-accent/15 -rotate-6" aria-hidden="true" />
           <i className="icon-[tabler--first-aid-kit]   pointer-events-none absolute bottom-28 right-8 text-[68px]  text-medical-primary/10 rotate-12" aria-hidden="true" />
@@ -121,15 +121,11 @@ export default function LoginPage() {
 
           <div className="relative z-10 w-full max-w-[400px]">
 
-            {/* Mobile logo */}
-            <div className="mb-8 flex items-center gap-3 lg:hidden">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-medical-primary to-medical-primaryDark shadow-md shadow-medical-primary/30">
-                <Stethoscope className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-medical-mutedText">DYS</p>
-                <p className="text-base font-bold text-medical-text">Medicine Platform</p>
-              </div>
+            <div className="mb-8">
+              <SimecLogo size={132} />
+              <p className="mt-1 text-sm font-medium text-medical-mutedText">
+                Plataforma de gestión médica
+              </p>
             </div>
 
             {/* Header */}
@@ -205,7 +201,7 @@ export default function LoginPage() {
                 </div>
                 <div className="flex justify-end">
                   <Link
-                    href="#"
+                    href="/forgot-password"
                     className="text-xs font-semibold text-medical-primary transition hover:text-medical-primaryDark hover:underline"
                   >
                     ¿Olvidaste tu contraseña?

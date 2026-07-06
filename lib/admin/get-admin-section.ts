@@ -7,7 +7,7 @@ export function getAdminSectionLabel(pathname: string): string {
   if (pathname.startsWith("/admin/obras-sociales")) return "Obras sociales";
   if (pathname.startsWith("/admin/servicios")) return "Servicios";
   if (pathname.startsWith("/admin/stock")) return "Stock";
-  if (pathname.startsWith("/admin/reportes")) return "Reportes";
+  if (pathname.startsWith("/admin/reportes")) return "Liquidación";
   if (pathname.startsWith("/admin/configuracion")) return "Configuración";
   return "Panel Admin";
 }

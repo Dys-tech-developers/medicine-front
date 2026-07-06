@@ -75,6 +75,9 @@ export function useCachedList<T>({
       setTotal(cached.total);
       setLoading(false);
       setError("");
+    } else {
+      setItems([]);
+      setTotal(0);
     }
 
     let cancelled = false;

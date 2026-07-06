@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
@@ -11,13 +11,16 @@ import {
   Loader2,
   MapPin,
   Phone,
+  Layers,
   Stethoscope,
   UserPlus,
 } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
+import { PrestadorServiciosPicker } from "@/components/admin/PrestadorServiciosPicker";
 import { createPrestadorWithApi } from "@/lib/api/prestadores";
-import type { CreatePrestadorBody, RegimenIva } from "@/lib/api/types";
+import { listServiciosAllWithApi } from "@/lib/api/servicios";
+import type { CreatePrestadorBody, RegimenIva, ServicioConTarifasDto } from "@/lib/api/types";
 import {
   DEFAULT_MIN_LOADING_MS,
   delayRemaining,
@@ -86,7 +89,8 @@ function validateForm(values: FormState): string | null {
   return null;
 }
 
-function toPayload(values: FormState): CreatePrestadorBody {
+function toPayload(values: FormState, servicioIds: number[]): CreatePrestadorBody {
+  const uniqueIds = [...new Set(servicioIds)];
   return {
     nombre: values.nombre.trim(),
     email: values.email.trim().toLowerCase(),
@@ -99,6 +103,7 @@ function toPayload(values: FormState): CreatePrestadorBody {
     cbu: values.cbu.replace(/\D/g, ""),
     regimenIva: values.regimenIva as RegimenIva,
     estado: values.estado,
+    ...(uniqueIds.length > 0 ? { servicioIds: uniqueIds } : {}),
   };
 }
 
@@ -193,6 +198,27 @@ export function CreatePrestadorForm({
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [servicioIds, setServicioIds] = useState<number[]>([]);
+  const [serviciosCatalog, setServiciosCatalog] = useState<ServicioConTarifasDto[]>([]);
+  const [loadingServicios, setLoadingServicios] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingServicios(true);
+    void listServiciosAllWithApi(accessToken, { estado: true })
+      .then((items) => {
+        if (!cancelled) setServiciosCatalog(items.filter((s) => s.estado));
+      })
+      .catch(() => {
+        if (!cancelled) setServiciosCatalog([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingServicios(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const set =
     <K extends keyof FormState>(key: K) =>
@@ -216,9 +242,10 @@ export function CreatePrestadorForm({
     setLoading(true);
     const startedAt = Date.now();
     try {
-      const result = await createPrestadorWithApi(accessToken, toPayload(values));
+      const result = await createPrestadorWithApi(accessToken, toPayload(values, servicioIds));
       await delayRemaining(DEFAULT_MIN_LOADING_MS, startedAt);
       setValues(INITIAL);
+      setServicioIds([]);
       setShowPassword(false);
       showToast("Prestador creado correctamente", "success", `${result.nombre} · ${result.matricula}`);
       onCreated?.();
@@ -419,6 +446,24 @@ export function CreatePrestadorForm({
                   </Field>
                 </div>
               </div>
+            </FormSection>
+
+            <FormSection
+              icon={Layers}
+              title="Servicios habilitados"
+              description="Prestaciones que el profesional puede realizar (opcional)."
+              className="border-t border-medical-border/60"
+            >
+              <PrestadorServiciosPicker
+                servicios={serviciosCatalog}
+                selectedIds={servicioIds}
+                onChange={setServicioIds}
+                loading={loadingServicios}
+                disabled={loading}
+              />
+              <p className="mt-2 text-xs text-medical-mutedText">
+                Podés dejarlo vacío y configurar los servicios después desde el directorio.
+              </p>
             </FormSection>
 
             <FormSection

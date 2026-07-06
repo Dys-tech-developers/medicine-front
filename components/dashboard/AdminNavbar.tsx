@@ -1,6 +1,8 @@
 "use client";
 
-import { Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Bell, ChevronDown, LogOut, Menu, Settings, User } from "lucide-react";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ export type AdminNavbarProps = {
   session?: AdminNavbarSession | null;
   notificationCount?: number;
   onLogout?: () => void;
+  onOpenMobileNav?: () => void;
 };
 
 function initials(name: string) {
@@ -42,18 +45,29 @@ export function AdminNavbar({
   session,
   notificationCount = 0,
   onLogout,
+  onOpenMobileNav,
 }: AdminNavbarProps) {
   return (
-    <header className="sticky top-0 z-50 isolate flex h-20 shrink-0 items-center border-b border-medical-border bg-white/95 px-6 shadow-sm backdrop-blur-md">
+    <header className="sticky top-0 z-50 isolate flex h-16 shrink-0 items-center border-b border-medical-border bg-white/95 px-4 shadow-sm backdrop-blur-md sm:h-[4.5rem] sm:px-6">
       
       {/* Sección activa */}
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Abrir menú"
+          className="size-9 shrink-0 cursor-pointer text-medical-mutedText hover:bg-medical-surface hover:text-medical-text md:hidden"
+          onClick={onOpenMobileNav}
+        >
+          <Menu className="size-5" />
+        </Button>
         <span className="h-7 w-0.5 shrink-0 rounded-full bg-medical-primary" />
         <div className="min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-widest text-medical-mutedText/60">
+          <p className="text-xs font-medium uppercase tracking-wide text-medical-mutedText/70">
             Sección
           </p>
-          <p className="truncate text-sm font-semibold leading-tight text-medical-text">
+          <p className="truncate text-sm font-semibold leading-tight text-medical-text sm:text-base">
             {currentSection}
           </p>
         </div>
@@ -121,7 +135,7 @@ export function AdminNavbar({
           <DropdownMenuContent
             align="end"
             sideOffset={8}
-            className="z-[60] w-48 border-medical-border bg-white p-1 shadow-md ring-1 ring-black/[0.04]"
+            className="z-60 w-48 border-medical-border bg-white p-1 shadow-md ring-1 ring-black/[0.04]"
           >
             {/* Header con info del usuario */}
             <DropdownMenuLabel className="px-2 py-2.5 font-normal">
@@ -142,13 +156,23 @@ export function AdminNavbar({
 
             <DropdownMenuSeparator className="bg-medical-border/60" />
 
-            <DropdownMenuItem className="cursor-pointer gap-2.5 rounded-md px-2 py-2 text-xs text-medical-text focus:bg-medical-surface">
-              <User className="size-4 shrink-0 text-medical-mutedText" />
-              Mi perfil
+            <DropdownMenuItem asChild>
+              <Link
+                href="/admin/configuracion?tab=cuenta"
+                className="cursor-pointer gap-2.5 rounded-md px-2 py-2 text-xs text-medical-text focus:bg-medical-surface"
+              >
+                <User className="size-4 shrink-0 text-medical-mutedText" />
+                Mi perfil
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer gap-2.5 rounded-md px-2 py-2 text-xs text-medical-text focus:bg-medical-surface">
-              <Settings className="size-4 shrink-0 text-medical-mutedText" />
-              Configuración
+            <DropdownMenuItem asChild>
+              <Link
+                href="/admin/configuracion"
+                className="cursor-pointer gap-2.5 rounded-md px-2 py-2 text-xs text-medical-text focus:bg-medical-surface"
+              >
+                <Settings className="size-4 shrink-0 text-medical-mutedText" />
+                Configuración
+              </Link>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator className="bg-medical-border/60" />

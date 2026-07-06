@@ -11,23 +11,27 @@ type PacienteHistoriaClinicaPromptDialogProps = {
   open: boolean;
   paciente: PacienteDto | null;
   onConfirm: () => void;
-  onDecline: () => void;
+  /** Siguiente paso opcional: asignar servicio sin crear historia ahora. */
+  onContinueWithoutHistoria: () => void;
+  /** Cierra el wizard completo (historia y servicios para más tarde). */
+  onFinish: () => void;
 };
 
 export function PacienteHistoriaClinicaPromptDialog({
   open,
   paciente,
   onConfirm,
-  onDecline,
+  onContinueWithoutHistoria,
+  onFinish,
 }: PacienteHistoriaClinicaPromptDialogProps) {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onDecline();
+      if (e.key === "Escape") onFinish();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onDecline]);
+  }, [open, onFinish]);
 
   if (!open || !paciente || typeof document === "undefined") return null;
 
@@ -43,9 +47,9 @@ export function PacienteHistoriaClinicaPromptDialog({
     >
       <button
         type="button"
-        className="absolute cursor-pointer inset-0 bg-medical-text/55 backdrop-blur-sm"
+        className="absolute inset-0 cursor-pointer bg-medical-text/55 backdrop-blur-sm"
         aria-label="Cerrar"
-        onClick={onDecline}
+        onClick={onFinish}
       />
       <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-medical-border bg-white shadow-xl">
         <div className="flex items-start justify-between border-b border-medical-border bg-medical-primary px-5 py-4">
@@ -59,8 +63,8 @@ export function PacienteHistoriaClinicaPromptDialog({
             type="button"
             variant="ghost"
             size="icon"
-            className="text-white cursor-pointer hover:bg-white/15 hover:text-white"
-            onClick={onDecline}
+            className="cursor-pointer text-white hover:bg-white/15 hover:text-white"
+            onClick={onFinish}
           >
             <X className="size-5" />
           </Button>
@@ -68,7 +72,7 @@ export function PacienteHistoriaClinicaPromptDialog({
 
         <div className="space-y-4 px-5 py-6 sm:px-6">
           <p id="historia-prompt-desc" className="text-sm leading-relaxed text-medical-text">
-            El paciente fue registrado correctamente. ¿Desea crear una historia clínica para{" "}
+            El paciente fue registrado correctamente. ¿Querés crear la historia clínica de{" "}
             <span className="font-semibold text-medical-primary">{nombre}</span>
             {paciente.codigoQr ? (
               <>
@@ -79,21 +83,34 @@ export function PacienteHistoriaClinicaPromptDialog({
             ?
           </p>
           <p className="text-xs text-medical-mutedText">
-            Cada paciente puede tener una única historia clínica asociada. Podrá completarla ahora
-            o hacerlo más tarde desde el sistema.
+            Podés crearla ahora, pasar a asignar un servicio, o terminar y completar ambos pasos
+            más tarde desde la ficha del paciente.
           </p>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-medical-border bg-medical-surface/80 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-          <Button type="button" variant="outline" className="sm:min-w-[120px] cursor-pointer" onClick={onDecline}>
-            No, más tarde
-          </Button>
+        <div className="flex flex-col gap-2 border-t border-medical-border bg-medical-surface/80 px-5 py-4 sm:px-6">
           <Button
             type="button"
-            className="bg-medical-primary text-white cursor-pointer hover:bg-medical-primaryDark sm:min-w-[140px]"
+            className="w-full cursor-pointer bg-medical-primary text-white hover:bg-medical-primaryDark"
             onClick={onConfirm}
           >
             Sí, crear historia
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full cursor-pointer"
+            onClick={onContinueWithoutHistoria}
+          >
+            Continuar sin historia
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full cursor-pointer text-medical-mutedText"
+            onClick={onFinish}
+          >
+            Terminar por ahora
           </Button>
         </div>
       </div>

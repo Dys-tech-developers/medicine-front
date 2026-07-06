@@ -7,6 +7,7 @@ import type {
   PrestadorListItemDto,
   ReportePeriodo,
   ReportesMetaDto,
+  UpdatePrestadorServiciosBody,
 } from "@/lib/api/types";
 import {
   formatVisitaFilterDesdeParam,
@@ -20,6 +21,10 @@ export type ListPrestadoresOptions = {
   fechaDesde?: Date;
   fechaHasta?: Date;
   periodo?: ReportePeriodo;
+  /** Filtra prestadores habilitados para el servicio (ADMIN, OPERADOR). */
+  servicioId?: number;
+  /** Filtra por estado del prestador (`true` = activos). */
+  estado?: boolean;
 };
 
 function buildPrestadoresSearchParams(options: ListPrestadoresOptions): URLSearchParams {
@@ -35,6 +40,12 @@ function buildPrestadoresSearchParams(options: ListPrestadoresOptions): URLSearc
   }
   if (!options.fechaDesde && !options.fechaHasta && options.periodo) {
     params.set("periodo", options.periodo);
+  }
+  if (options.servicioId != null && Number.isFinite(options.servicioId)) {
+    params.set("servicioId", String(options.servicioId));
+  }
+  if (options.estado != null) {
+    params.set("estado", String(options.estado));
   }
 
   return params;
@@ -108,11 +119,42 @@ export async function listPrestadoresWithApi(
 
 /** Catálogo completo para selects (respeta `pageSize` máx. del backend). */
 export async function listPrestadoresAllWithApi(
-  token: string
+  token: string,
+  options?: Omit<ListPrestadoresOptions, "page" | "pageSize">
 ): Promise<PrestadorListItemDto[]> {
   return fetchAllPaginatedItems((page, pageSize) =>
-    listPrestadoresWithApi(token, page, pageSize)
+    listPrestadoresWithApi(token, { ...options, page, pageSize })
   );
+}
+
+/** Prestadores activos habilitados para un servicio (combo paciente-servicio). */
+export async function listPrestadoresPorServicioWithApi(
+  token: string,
+  servicioId: number
+): Promise<PrestadorListItemDto[]> {
+  return listPrestadoresAllWithApi(token, { servicioId, estado: true });
+}
+
+function normalizePrestadorServicios(
+  raw: unknown
+): PrestadorListItemDto["servicios"] {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const id = Number(row.id ?? row.servicioId ?? row.servicio_id);
+      if (!Number.isFinite(id) || id <= 0) return null;
+      const nombre = row.nombre != null ? String(row.nombre) : undefined;
+      const estado = row.estado != null ? Boolean(row.estado) : undefined;
+      return {
+        id,
+        ...(nombre ? { nombre } : {}),
+        ...(estado !== undefined ? { estado } : {}),
+      };
+    })
+    .filter((s): s is NonNullable<typeof s> => s != null);
+  return items;
 }
 
 function normalizePrestador(
@@ -123,11 +165,13 @@ function normalizePrestador(
   const estadoCuenta = withEstadoCuenta
     ? normalizeEstadoCuenta(estadoCuentaRaw) ?? EMPTY_PRESTADOR_ESTADO_CUENTA
     : normalizeEstadoCuenta(estadoCuentaRaw);
+  const servicios = normalizePrestadorServicios(row.servicios);
 
   return {
     ...row,
     cbu: row.cbu != null ? String(row.cbu) : undefined,
     regimenIva: row.regimenIva as PrestadorListItemDto["regimenIva"],
+    ...(servicios !== undefined ? { servicios } : {}),
     ...(estadoCuenta ? { estadoCuenta } : {}),
   };
 }
@@ -146,6 +190,30 @@ export async function createPrestadorWithApi(
 ): Promise<PrestadorListItemDto> {
   const data = await apiFetch<PrestadorListItemDto>("/api/v1/prestadores", {
     method: "POST",
+    token,
+    body: JSON.stringify(body),
+  });
+  return normalizePrestador(data as PrestadorListItemDto & Record<string, unknown>);
+}
+
+export async function getPrestadorByIdWithApi(
+  token: string,
+  id: number
+): Promise<PrestadorListItemDto> {
+  const data = await apiFetch<PrestadorListItemDto>(`/api/v1/prestadores/${id}`, {
+    method: "GET",
+    token,
+  });
+  return normalizePrestador(data as PrestadorListItemDto & Record<string, unknown>);
+}
+
+export async function updatePrestadorServiciosWithApi(
+  token: string,
+  id: number,
+  body: UpdatePrestadorServiciosBody
+): Promise<PrestadorListItemDto> {
+  const data = await apiFetch<PrestadorListItemDto>(`/api/v1/prestadores/${id}/servicios`, {
+    method: "PUT",
     token,
     body: JSON.stringify(body),
   });

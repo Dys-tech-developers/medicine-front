@@ -109,3 +109,28 @@ export function filtersToApiQuery(filters: ReportesFinanzasFilters): ReportesQue
 
   return query;
 }
+
+export function reportesFinanzasExportHasActiveFilters(
+  filters: Omit<ReportesFinanzasFilters, "page" | "pageSize">
+): boolean {
+  return (
+    filters.periodo !== DEFAULT_REPORTES_FINANZAS_FILTERS.periodo ||
+    Boolean(filters.fechaDesde && filters.fechaHasta) ||
+    filters.prestadorId !== "all" ||
+    filters.servicioId !== "all" ||
+    filters.facturado !== "all" ||
+    filters.pagado !== "all"
+  );
+}
+
+export function filtersToReportesQuery(
+  filters: Omit<ReportesFinanzasFilters, "page" | "pageSize">
+): ReportesQueryOptions {
+  const { page: _page, pageSize: _pageSize, ...query } = filtersToApiQuery({
+    ...DEFAULT_REPORTES_FINANZAS_FILTERS,
+    ...filters,
+    page: 1,
+    pageSize: 100,
+  });
+  return query;
+}

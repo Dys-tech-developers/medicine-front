@@ -16,7 +16,7 @@ export type AuthSession = {
 };
 
 export function resolveAppRole(roles: string[]): AppRole | null {
-  if (roles.includes("ADMIN")) return "admin";
+  if (roles.includes("ADMIN") || roles.includes("OPERADOR")) return "admin";
   if (roles.includes("PRESTADOR")) return "prestador";
   return null;
 }
@@ -71,4 +71,35 @@ export function loadAuthSession(): AuthSession | null {
 export function clearAuthSession(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+}
+
+export const AUTH_SESSION_UPDATED_EVENT = "medicine.auth.session.updated";
+
+export function dispatchAuthSessionUpdated(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(AUTH_SESSION_UPDATED_EVENT));
+}
+
+/** Actualiza nombre, email y roles en la sesión local tras PATCH /auth/me. */
+export function updateAuthSessionFromUser(user: {
+  id: number;
+  nombre: string;
+  email: string;
+  roles: string[];
+}): AuthSession | null {
+  const current = loadAuthSession();
+  if (!current) return null;
+
+  const role = resolveAppRole(user.roles) ?? current.role;
+  const next: AuthSession = {
+    ...current,
+    userId: user.id,
+    email: user.email,
+    name: user.nombre,
+    roles: user.roles,
+    role,
+  };
+  saveAuthSession(next);
+  dispatchAuthSessionUpdated();
+  return next;
 }

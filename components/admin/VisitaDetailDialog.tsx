@@ -15,13 +15,13 @@ import {
 import { Button } from "@/components/ui/button";
 import type { VisitaListItemDto } from "@/lib/api/types";
 import {
-  formatPacienteServicioEstado,
   formatVisitaDateTime,
   formatVisitaDuracion,
   formatVisitaFecha,
   getPacienteNombre,
 } from "@/lib/visitas-display";
-import { MEDICAL_UI, visitaEstadoBadgeClass } from "@/lib/medical-ui-classes";
+import { formatVisitaEstado, visitaEstadoBadgeClass } from "@/lib/visita-estado-labels";
+import { MEDICAL_UI } from "@/lib/medical-ui-classes";
 import { cn } from "@/lib/utils";
 
 /* ─── componentes internos ─────────────────────────────────────── */
@@ -108,7 +108,6 @@ export function VisitaDetailDialog({ open, visita, onClose }: VisitaDetailDialog
 
   const paciente = visita.pacienteServicio?.paciente;
   const servicio = visita.pacienteServicio?.servicio;
-  const estado = visita.pacienteServicio?.estado;
   const insumos = visita.insumos ?? [];
   const totalInsumos = insumos.reduce((sum, i) => sum + i.cantidad, 0);
 
@@ -178,18 +177,14 @@ export function VisitaDetailDialog({ open, visita, onClose }: VisitaDetailDialog
             <span className="text-[11px] text-medical-mutedText sm:text-xs">Servicio</span>
           </div>
           <div className="flex min-w-0 flex-col items-center gap-0.5 px-2 py-2.5 sm:px-3 sm:py-3">
-            {estado ? (
-              <span
-                className={cn(
-                  "max-w-full truncate rounded-md border px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-xs",
-                  visitaEstadoBadgeClass(estado)
-                )}
-              >
-                {formatPacienteServicioEstado(estado)}
-              </span>
-            ) : (
-              <span className="text-sm font-semibold text-medical-mutedText">—</span>
-            )}
+            <span
+              className={cn(
+                "max-w-full truncate rounded-md border px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-xs",
+                visitaEstadoBadgeClass(visita.estado)
+              )}
+            >
+              {formatVisitaEstado(visita.estado)}
+            </span>
             <span className="text-[11px] text-medical-mutedText sm:text-xs">Estado</span>
           </div>
         </div>

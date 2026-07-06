@@ -49,12 +49,11 @@ export function useServiciosList({
       const idx = next.findIndex((s) => s.id === servicio.id);
       const previous = idx >= 0 ? next[idx] : null;
       const merged: ServicioConTarifasDto = {
-        id: servicio.id,
-        nombre: servicio.nombre,
-        estado: servicio.estado,
-        descripcion: servicio.descripcion ?? previous?.descripcion ?? null,
-        createdAt: servicio.createdAt || previous?.createdAt || "",
-        tarifas: servicio.tarifas?.length ? servicio.tarifas : (previous?.tarifas ?? []),
+        ...(previous ?? ({} as ServicioConTarifasDto)),
+        ...servicio,
+        tarifas: servicio.tarifas?.length
+          ? servicio.tarifas
+          : (previous?.tarifas ?? []),
         pacientes: servicio.pacientes?.length
           ? servicio.pacientes
           : (previous?.pacientes ?? []),

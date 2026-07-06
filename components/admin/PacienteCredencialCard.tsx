@@ -1,6 +1,23 @@
+import type { ReactNode } from "react";
+import { SIMEC_LOGO_SRC } from "@/components/brand/SimecLogo";
 import type { PacienteDto } from "@/lib/api/types";
-import { getPacienteNombre } from "@/lib/pacientes-display";
+import { getPacienteNombre, formatPacienteSexo } from "@/lib/pacientes-display";
 import { calculateAgeFromBirthDate } from "@/lib/patient-qr";
+
+/* Paleta de marca (solo HEX/RGBA: html2canvas no soporta oklch/lab). */
+const COLORS = {
+  primary: "#454c92",
+  primaryDark: "#3a4078",
+  slate: "#4b6a87",
+  teal: "#97c1bf",
+  tealSoft: "#eef6f5",
+  tealBorder: "#cfe3e1",
+  ink: "#1f2937",
+  muted: "#6b7280",
+  surface: "#f8fafc",
+  border: "#e8edf3",
+  white: "#ffffff",
+};
 
 function formatFechaNacimiento(iso: string): string {
   if (!iso) return "—";
@@ -13,23 +30,62 @@ function formatFechaNacimiento(iso: string): string {
   });
 }
 
-function DataRow({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  fullWidth = false,
+}: {
+  label: string;
+  value: string;
+  fullWidth?: boolean;
+}) {
   return (
-    <div>
+    <div style={{ flex: fullWidth ? "1 1 100%" : 1, minWidth: 0 }}>
       <p
         style={{
-          fontSize: 10,
-          color: "#4c4c4c",
-          margin: "0 0 1px",
+          fontSize: 9,
+          color: COLORS.muted,
+          margin: "0 0 2px",
+          fontWeight: 600,
           textTransform: "uppercase",
-          letterSpacing: "0.05em",
+          letterSpacing: "0.07em",
         }}
       >
         {label}
       </p>
-      <p style={{ fontSize: 13, color: "#4c4c4c", fontWeight: 600, margin: 0 }}>
+      <p
+        style={{
+          fontSize: 13,
+          lineHeight: 1.25,
+          color: COLORS.ink,
+          fontWeight: 600,
+          margin: 0,
+          wordBreak: "break-word",
+        }}
+      >
         {value}
       </p>
+    </div>
+  );
+}
+
+function Row({
+  children,
+  last = false,
+}: {
+  children: ReactNode;
+  last?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 14,
+        padding: "7px 0",
+        borderBottom: last ? "none" : `1px solid ${COLORS.border}`,
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -41,155 +97,278 @@ type PacienteCredencialCardProps = {
 /** Tarjeta imprimible: solo estilos inline (compatible con captura a PDF). */
 export function PacienteCredencialCard({ paciente }: PacienteCredencialCardProps) {
   const obraSocialNombre = paciente.obraSocial?.nombre?.trim() ?? null;
+  const localidad = paciente.localidad?.trim() ?? null;
+  const numeroAfiliado = paciente.numeroAfiliado?.trim() ?? null;
 
   return (
     <div
       data-credencial-card
       style={{
         overflow: "hidden",
-        borderRadius: 12,
-        border: "1px solid #97c1bf",
-        background: "#ffffff",
-        boxShadow: "0 1px 3px 0 rgba(15, 23, 42, 0.08)",
+        borderRadius: 18,
+        border: `1px solid ${COLORS.border}`,
+        background: COLORS.white,
+        boxShadow: "0 10px 30px -12px rgba(15, 23, 42, 0.25)",
         fontFamily: "system-ui, -apple-system, sans-serif",
-        width: 340,
-        color: "#0F172A",
+        width: 320,
+        color: COLORS.ink,
       }}
     >
+      {/* Header */}
       <div
         style={{
-          background: "linear-gradient(135deg, #454c92 0%, #4b6a87 100%)",
-          padding: "18px 20px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
+          position: "relative",
+          overflow: "hidden",
+        background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.slate} 100%)`,
+        padding: "14px 20px",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
         }}
       >
+        <div
+          style={{
+            position: "absolute",
+            top: -48,
+            right: -36,
+            width: 132,
+            height: 132,
+            borderRadius: "50%",
+            background: "rgba(255, 255, 255, 0.07)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            bottom: -54,
+            right: 34,
+            width: 96,
+            height: 96,
+            borderRadius: "50%",
+            background: "rgba(255, 255, 255, 0.05)",
+          }}
+        />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/simeclogodos.png"
+          src={SIMEC_LOGO_SRC}
           alt="SIMEC"
           style={{
-            width: 56,
-            height: 56,
-            padding: 2,
+            position: "relative",
+            width: 44,
+            height: 44,
+            padding: 3,
             borderRadius: "50%",
             objectFit: "contain",
-            background: "#ffffff",
+            background: COLORS.white,
+            boxShadow: "0 2px 6px rgba(0, 0, 0, 0.18)",
             flexShrink: 0,
           }}
         />
-        <div style={{ color: "#ffffff" }}>
-          <p style={{ fontSize: 18, fontWeight: 900, margin: 0, lineHeight: 1.2 }}>
+        <div style={{ position: "relative", color: COLORS.white }}>
+          <p
+            style={{
+              fontSize: 18,
+              fontWeight: 800,
+              margin: 0,
+              lineHeight: 1.1,
+              letterSpacing: "0.04em",
+            }}
+          >
             SIMEC
           </p>
-          <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
+          <p
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              margin: "2px 0 0",
+              textTransform: "uppercase",
+              letterSpacing: "0.16em",
+              color: "rgba(255, 255, 255, 0.82)",
+            }}
+          >
             Credencial de Paciente
           </p>
         </div>
       </div>
 
-      <div style={{ padding: "20px 20px 16px", background: "#ffffff" }}>
-        <p
-          style={{
-            fontSize: 18,
-            fontWeight: 900,
-            color: "#454c92",
-            margin: "0 0 4px",
-          }}
-        >
-        Paciente:  {getPacienteNombre(paciente)}
-        </p>
-
-        {obraSocialNombre ? (
-          <p
+      {/* Body */}
+      <div style={{ padding: "14px 20px", background: COLORS.white }}>
+        {/* Nombre */}
+        <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
+          <div
             style={{
-              fontSize: 12,
-              color: "#454c92",
-              fontWeight: 700,
-              margin: "0 0 16px",
-              textTransform: "underline",
+              width: 4,
+              borderRadius: 4,
+              background: `linear-gradient(180deg, ${COLORS.primary} 0%, ${COLORS.teal} 100%)`,
+              flexShrink: 0,
             }}
-          >
-           Obra Social: {obraSocialNombre}
-          </p>
-        ) : null}
+          />
+          <div style={{ minWidth: 0 }}>
+            <p
+              style={{
+                fontSize: 9,
+                color: COLORS.muted,
+                margin: "0 0 3px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+              }}
+            >
+              Paciente
+            </p>
+            <p
+              style={{
+                fontSize: 17,
+                fontWeight: 800,
+                color: COLORS.ink,
+                margin: 0,
+                lineHeight: 1.2,
+                wordBreak: "break-word",
+              }}
+            >
+              {getPacienteNombre(paciente)}
+            </p>
+            {obraSocialNombre ? (
+              <div
+                style={{
+                  display: "inline-block",
+                  marginTop: 6,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  background: COLORS.tealSoft,
+                  border: `1px solid ${COLORS.tealBorder}`,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: COLORS.slate,
+                }}
+              >
+                {obraSocialNombre}
+              </div>
+            ) : null}
+          </div>
+        </div>
 
+        {/* QR */}
         <div
           style={{
             display: "flex",
-            justifyContent: "center",
-            margin: "0 0 16px",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+            margin: "12px 0 2px",
           }}
         >
           <div
             style={{
-              padding: 10,
-              borderRadius: 12,
-              border: "1.5px solid #97c1bf",
-              background: "#F9FAFB",
-              display: "inline-block",
+              padding: 9,
+              borderRadius: 14,
+              border: `1px solid ${COLORS.border}`,
+              background: COLORS.white,
+              boxShadow: "0 4px 14px -6px rgba(15, 23, 42, 0.18)",
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={paciente.qrDataUrl}
               alt={`QR ${paciente.codigoQr}`}
-              style={{ width: 160, height: 160, display: "block" }}
+              style={{ width: 124, height: 124, display: "block" }}
             />
+          </div>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 12px",
+              borderRadius: 999,
+              background: COLORS.surface,
+              border: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: COLORS.teal,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "ui-monospace, monospace",
+                fontSize: 13,
+                fontWeight: 700,
+                color: COLORS.slate,
+                letterSpacing: "0.12em",
+              }}
+            >
+              {paciente.codigoQr}
+            </span>
           </div>
         </div>
 
-        <p
-          style={{
-            textAlign: "center",
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 13,
-            fontWeight: 700,
-            color: "#4b6a87",
-            letterSpacing: "0.1em",
-            margin: "0 0 14px",
-          }}
-        >
-          {paciente.codigoQr}
-        </p>
-
-        <div style={{ height: 1, background: "#97c1bf", margin: "0 0 14px" }} />
-
+        {/* Datos */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "8px 12px",
+            marginTop: 10,
+            padding: "0 14px",
+            borderRadius: 14,
+            background: COLORS.surface,
+            border: `1px solid ${COLORS.border}`,
           }}
         >
-          <DataRow label="DNI" value={paciente.numeroDocumento} />
-          <DataRow
-            label="Edad"
-            value={`${calculateAgeFromBirthDate(paciente.fechaNacimiento)} años`}
-          />
-          <DataRow
-            label="Nacimiento"
-            value={formatFechaNacimiento(paciente.fechaNacimiento)}
-          />
-          {paciente.numeroAfiliado ? (
-            <DataRow label="N° Afiliado" value={paciente.numeroAfiliado} />
+          <Row>
+            <Field label="DNI" value={paciente.numeroDocumento || "—"} />
+            <Field
+              label="Edad"
+              value={`${calculateAgeFromBirthDate(paciente.fechaNacimiento)} años`}
+            />
+          </Row>
+          <Row last={!numeroAfiliado && !localidad}>
+            <Field
+              label="Nacimiento"
+              value={formatFechaNacimiento(paciente.fechaNacimiento)}
+            />
+            <Field label="Sexo" value={formatPacienteSexo(paciente.sexo)} />
+          </Row>
+          {numeroAfiliado || localidad ? (
+            <Row last>
+              {numeroAfiliado ? (
+                <Field label="N° Afiliado" value={numeroAfiliado} />
+              ) : null}
+              {localidad ? (
+                <Field label="Localidad" value={localidad} />
+              ) : null}
+            </Row>
           ) : null}
         </div>
       </div>
 
+      {/* Footer */}
       <div
         style={{
-          background: "#454c92",
-          borderTop: "1px solid #97c1bf",
-          padding: "10px 20px",
+          background: COLORS.primary,
+          borderTop: `3px solid ${COLORS.teal}`,
+          padding: "8px 20px",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "center",
         }}
       >
-      
-   
+        <p
+          style={{
+            margin: 0,
+            fontSize: 9,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            color: "rgba(255, 255, 255, 0.9)",
+            textAlign: "center",
+          }}
+        >
+          Presentá esta credencial en cada atención
+        </p>
       </div>
     </div>
   );

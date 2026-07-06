@@ -26,3 +26,10 @@ export function prestadoresPeriodFiltersToApi(
   }
   return { periodo: "mensual" };
 }
+
+export function hasActivePrestadoresPeriodFilters(
+  filters: PrestadoresPeriodFiltersState
+): boolean {
+  if (filters.fechaDesde.trim() && filters.fechaHasta.trim()) return true;
+  return filters.periodo !== DEFAULT_PRESTADORES_PERIOD_FILTERS.periodo;
+}

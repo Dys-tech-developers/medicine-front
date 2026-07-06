@@ -63,43 +63,43 @@ function VisitaListItem({ visita, index }: { visita: VisitaListItemDto; index: n
   const paciente = getPacienteNombre(visita);
   const prestador = visita.prestador?.nombre ?? null;
   const servicio = visita.pacienteServicio?.servicio?.nombre ?? null;
+  const fechaLabel = formatVisitaDate(visita.fecha);
+  const horaLabel = formatVisitaTime(visita.fecha);
 
   return (
     <li
       className={cn(
-        "flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-medical-secondary/40",
+        "flex flex-col gap-2 px-4 py-3.5 transition-colors hover:bg-medical-secondary/40 sm:flex-row sm:items-center sm:gap-3.5 sm:px-5",
         index % 2 === 1 && "bg-medical-secondary/20"
       )}
     >
-      {/* Avatar cuadrado-redondeado */}
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-medical-secondary text-xs font-bold text-medical-primary ring-1 ring-medical-primary/10">
-        {getPacienteInitials(visita)}
-      </div>
-
-      {/* Info principal */}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-medical-text">{paciente}</p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          {prestador ? (
-            <span className="truncate text-xs text-medical-mutedText">{prestador}</span>
-          ) : null}
-          {servicio ? (
-            <span className="inline-flex items-center rounded-md border border-medical-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-medical-text">
-              {servicio}
-            </span>
-          ) : null}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-medical-secondary text-xs font-bold text-medical-primary ring-1 ring-medical-primary/10">
+          {getPacienteInitials(visita)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-medical-text">{paciente}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            {prestador ? (
+              <span className="truncate text-xs text-medical-mutedText">{prestador}</span>
+            ) : null}
+            {servicio ? (
+              <span className="inline-flex max-w-full items-center truncate rounded-md border border-medical-border bg-white px-1.5 py-0.5 text-xs font-medium text-medical-text sm:max-w-[12rem]">
+                {servicio}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* Duración + fecha */}
-      <div className="shrink-0 text-right">
+      <div className="flex shrink-0 items-center justify-between gap-2 pl-12 sm:block sm:pl-0 sm:text-right">
         <span className="inline-flex items-center gap-1 rounded-lg border border-medical-primary/20 bg-medical-secondary px-2 py-0.5 text-xs font-semibold text-medical-primaryDark">
           <Clock className="size-3 shrink-0" />
           {formatVisitaDuracion(visita.tiempoMinutos)}
         </span>
-        <p className="mt-1 text-[10px] font-medium text-medical-mutedText">
-          {formatVisitaDate(visita.fecha)}
-          {formatVisitaTime(visita.fecha) ? ` · ${formatVisitaTime(visita.fecha)}` : ""}
+        <p className="text-xs font-medium text-medical-mutedText sm:mt-1">
+          {fechaLabel}
+          {horaLabel ? ` · ${horaLabel}` : ""}
         </p>
       </div>
     </li>

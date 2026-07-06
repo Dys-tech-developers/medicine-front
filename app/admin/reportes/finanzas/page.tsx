@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DollarSign, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, DollarSign, RefreshCw } from "lucide-react";
 import {
   ReportesFilters,
   type ReportesFiltersState,
@@ -14,10 +14,13 @@ import { ResumenFinancieroCards } from "@/components/reportes/ResumenFinancieroC
 import {
   Card,
   CardContent,
-  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ToastStack } from "@/components/ui/toast-stack";
+import { useToast } from "@/components/ui/use-toast";
 import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import {
@@ -29,10 +32,12 @@ import { useMinimumLoadingDisplay } from "@/lib/hooks/use-minimum-loading-displa
 import { useReportesFilterOptions } from "@/lib/hooks/use-reportes-filter-options";
 import { loadAuthSession, type AuthSession } from "@/lib/auth-session";
 import { canEditFinanzasReportes } from "@/lib/reportes/access";
+import { exportReportesFinanzasWithFilters } from "@/lib/reportes-finanzas-export";
 import {
   filtersFromSearchParams,
   filtersToApiQuery,
   filtersToSearchParams,
+  reportesFinanzasExportHasActiveFilters,
   type ReportesFinanzasFilters,
 } from "@/lib/reportes/url-filters";
 
@@ -78,7 +83,9 @@ export default function ReportesFinanzasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [exportingList, setExportingList] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const { toasts, showToast, dismiss } = useToast(4000);
 
   const { prestadores, servicios, loadingOptions, optionsError } = useReportesFilterOptions(
     session?.accessToken
@@ -198,22 +205,83 @@ export default function ReportesFinanzasPage() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / filters.pageSize) || 1);
+  const rangeStart = total === 0 ? 0 : (filters.page - 1) * filters.pageSize + 1;
+  const rangeEnd = Math.min(filters.page * filters.pageSize, total);
+
+  const paginationHint = useMemo(() => {
+    if (displayLoading) return "Cargando…";
+    if (total === 0) return "Sin registros.";
+    return `Mostrando ${rangeStart}–${rangeEnd} de ${total}`;
+  }, [displayLoading, total, rangeStart, rangeEnd]);
+
+  const exportFilters = useMemo(
+    () => ({
+      periodo: filters.periodo,
+      fechaDesde: filters.fechaDesde,
+      fechaHasta: filters.fechaHasta,
+      prestadorId: filters.prestadorId,
+      servicioId: filters.servicioId,
+      facturado: filters.facturado,
+      pagado: filters.pagado,
+    }),
+    [filters]
+  );
+
+  const hasExportFilters = useMemo(
+    () => reportesFinanzasExportHasActiveFilters(exportFilters),
+    [exportFilters]
+  );
+
+  const handleExportFinanzas = useCallback(async () => {
+    const token = session?.accessToken;
+    if (!token) {
+      showToast("Sesión no válida. Volvé a iniciar sesión.", "error");
+      return;
+    }
+
+    setExportingList(true);
+    try {
+      const count = await exportReportesFinanzasWithFilters(token, exportFilters);
+      if (count === 0) {
+        showToast(
+          "Sin visitas para exportar",
+          "error",
+          hasExportFilters
+            ? "Ninguna visita coincide con los filtros activos."
+            : "No hay visitas en el período seleccionado."
+        );
+        return;
+      }
+      showToast(
+        "Listado exportado",
+        "success",
+        `${count} visita${count === 1 ? "" : "s"}${hasExportFilters ? " (filtros aplicados)" : ""}`
+      );
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? getApiErrorMessages(err).join(" ")
+          : "No se pudo exportar el listado.";
+      showToast(msg, "error");
+    } finally {
+      setExportingList(false);
+    }
+  }, [session?.accessToken, exportFilters, hasExportFilters, showToast]);
+
   return (
     <div className="relative z-0 w-full flex-1 py-1 pb-20">
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
       <Card className="flex max-h-[calc(100vh-7.5rem)] flex-col overflow-hidden border-medical-border py-0 shadow-md">
-        <CardHeader className="shrink-0 gap-0 border-b border-medical-border bg-medical-primary px-4 py-3 sm:px-5">
+        <CardHeader className="shrink-0 gap-0 border-b border-medical-border bg-medical-primary px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20">
-                <DollarSign className="size-[1.125rem] text-white" />
+                <DollarSign className="size-4 text-white" aria-hidden />
               </span>
-              <div className="min-w-0">
-                <CardTitle className="text-base font-semibold text-white">Finanzas</CardTitle>
-                <CardDescription className="truncate text-xs text-white/85 sm:text-sm">
-                  Seguimiento facturado / pagado (sin AFIP)
-                  {!canEdit ? " · solo lectura" : ` · lote hasta ${MAX_BULK}`}
-                </CardDescription>
-              </div>
+              <CardTitle className="truncate text-base font-semibold text-white sm:text-lg">
+                Liquidación
+              </CardTitle>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <ReportesSectionTabs variant="header" />
@@ -241,6 +309,13 @@ export default function ReportesFinanzasPage() {
           onApply={handleApply}
           pageSize={filters.pageSize}
           onPageSizeChange={handlePageSizeChange}
+          exportingList={exportingList}
+          onExport={() => void handleExportFinanzas()}
+          exportTitle={
+            hasExportFilters
+              ? "Exportar liquidación con los filtros activos"
+              : "Exportar liquidación completa del período"
+          }
         />
 
         {optionsError ? (
@@ -254,9 +329,6 @@ export default function ReportesFinanzasPage() {
         <CardContent className="min-h-0 flex-1 overflow-auto p-0">
           <ReportesFinanzasTable
             items={items}
-            total={total}
-            page={filters.page}
-            pageSize={filters.pageSize}
             loading={displayLoading}
             error={error}
             accessToken={session?.accessToken ?? null}
@@ -264,11 +336,43 @@ export default function ReportesFinanzasPage() {
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onToggleSelectAllPage={toggleSelectAllPage}
-            onPageChange={handlePageChange}
             onItemsChange={setItems}
             onRetry={() => void fetchReport()}
           />
         </CardContent>
+
+        {!displayLoading && !error && items.length > 0 ? (
+          <CardFooter className="flex-col gap-4 border-t border-medical-border/80 bg-medical-surface/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-5">
+            <p className="text-sm text-medical-mutedText">{paginationHint}</p>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="default"
+                className="border-medical-border/80 cursor-pointer"
+                disabled={filters.page <= 1}
+                onClick={() => handlePageChange(filters.page - 1)}
+              >
+                <ChevronLeft className="size-4" />
+                Anterior
+              </Button>
+              <span className="min-w-24 px-1 text-center text-sm font-medium text-medical-text">
+                Página {filters.page} de {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="default"
+                className="border-medical-border/80 cursor-pointer"
+                disabled={filters.page >= totalPages}
+                onClick={() => handlePageChange(filters.page + 1)}
+              >
+                Siguiente
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </CardFooter>
+        ) : null}
       </Card>
 
       <ReportesFinanzasBulkBar

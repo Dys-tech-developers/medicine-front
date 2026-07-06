@@ -5,11 +5,11 @@ import type {
   ServicioPacienteAsignadoDto,
   ServicioTarifaDto,
 } from "@/lib/api/types";
-import { FRECUENCIA_TIPO_LABELS } from "@/lib/paciente-servicios-labels";
+import { formatPacienteServicioFrecuencia } from "@/lib/paciente-servicio-display";
 import { asignacionEstadoBadgeClass as asignacionEstadoBadgeClassUi } from "@/lib/medical-ui-classes";
 import {
+  labelTipoDia,
   MODALIDAD_COBRO_LABELS,
-  TIPO_DIA_LABELS,
   TIPO_JORNADA_LABELS,
 } from "@/lib/servicios-tarifas-labels";
 
@@ -38,12 +38,7 @@ export function formatAsignacionVigencia(p: ServicioPacienteAsignadoDto): string
 }
 
 export function formatAsignacionFrecuencia(p: ServicioPacienteAsignadoDto): string {
-  const tipo = FRECUENCIA_TIPO_LABELS[p.frecuenciaTipo] ?? p.frecuenciaTipo;
-  const valor = p.frecuenciaValor;
-  if (p.frecuenciaTipo === "por_horas") {
-    return `${valor} h · ${tipo}`;
-  }
-  return `${valor}× ${tipo.toLowerCase()}`;
+  return formatPacienteServicioFrecuencia(p);
 }
 
 export function formatAsignacionModalidad(p: ServicioPacienteAsignadoDto): string {
@@ -78,7 +73,7 @@ export function formatTarifaValor(valor: string): string {
 export function formatTarifaContexto(
   tarifa: Pick<ServicioTarifaDto, "tipoJornada" | "tipoDia" | "modalidadCobro">
 ): string {
-  return `${TIPO_JORNADA_LABELS[tarifa.tipoJornada]} · ${TIPO_DIA_LABELS[tarifa.tipoDia]} · ${MODALIDAD_COBRO_LABELS[tarifa.modalidadCobro]}`;
+  return `${TIPO_JORNADA_LABELS[tarifa.tipoJornada]} · ${labelTipoDia(tarifa.tipoDia)} · ${MODALIDAD_COBRO_LABELS[tarifa.modalidadCobro]}`;
 }
 
 /** Una línea para la celda compacta de la tabla (rango de valores si hay varias). */
@@ -98,4 +93,53 @@ export function hasPacienteAsignadoTarifas(
   p: ServicioPacienteAsignadoDto
 ): p is ServicioPacienteAsignadoDto & { tarifas: PacienteServicioTarifaDto[] } {
   return (p.tarifas?.length ?? 0) > 0;
+}
+
+export function formatServicioFecha(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("es-AR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+export function formatServicioControlHorario(controlHorario?: boolean): string {
+  return controlHorario ? "Sí — inicio y fin separados" : "No — registro en un paso";
+}
+
+export function formatServicioModoVisita(servicio: {
+  modoRelevo?: boolean;
+  controlHorario?: boolean;
+}): string {
+  if (servicio.modoRelevo) return "Relevamiento — cobertura continua por QR";
+  if (servicio.controlHorario) return "Control horario — inicio y fin separados";
+  return "Registro en un paso";
+}
+
+export type ServicioModoVisitaFormValue = "registro_unico" | "control_horario" | "relevamiento";
+
+export function servicioModoVisitaFromFlags(servicio: {
+  modoRelevo?: boolean;
+  controlHorario?: boolean;
+}): ServicioModoVisitaFormValue {
+  if (servicio.modoRelevo) return "relevamiento";
+  if (servicio.controlHorario) return "control_horario";
+  return "registro_unico";
+}
+
+export function servicioModoVisitaToFlags(modo: ServicioModoVisitaFormValue): {
+  controlHorario: boolean;
+  modoRelevo: boolean;
+} {
+  return {
+    controlHorario: modo === "control_horario",
+    modoRelevo: modo === "relevamiento",
+  };
 }

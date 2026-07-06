@@ -8,7 +8,11 @@ import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import { updateVisitaFinanzasWithApi } from "@/lib/api/visitas";
 import type { UpdateVisitaFinanzasBody, VisitaDetailDto, VisitaFinanzasDto } from "@/lib/api/types";
 import { formatReporteMonto } from "@/lib/reportes-display";
-import { MODALIDAD_COBRO_LABELS } from "@/lib/servicios-tarifas-labels";
+import {
+  labelTipoDia,
+  MODALIDAD_COBRO_LABELS,
+  TIPO_JORNADA_LABELS,
+} from "@/lib/servicios-tarifas-labels";
 import { getVisitaFinanzasEstadoLabel, VISITA_FINANZAS_UI } from "@/lib/visita-finanzas-labels";
 import {
   finanzasSiNoBadgeClass,
@@ -76,6 +80,18 @@ export function VisitaFinanzasAdminPanel({
           <span className="text-xs font-medium text-medical-mutedText">Modalidad</span>
           <span className="text-sm font-medium text-medical-text">
             {MODALIDAD_COBRO_LABELS[finanzas.modalidadCobro] ?? finanzas.modalidadCobro}
+          </span>
+        </div>
+        <div className="flex flex-col gap-1 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <span className="text-xs font-medium text-medical-mutedText">Jornada</span>
+          <span className="text-sm font-medium text-medical-text">
+            {TIPO_JORNADA_LABELS[finanzas.tipoJornada] ?? finanzas.tipoJornada}
+          </span>
+        </div>
+        <div className="flex flex-col gap-1 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <span className="text-xs font-medium text-medical-mutedText">Tipo de día</span>
+          <span className="text-sm font-medium text-medical-text">
+            {labelTipoDia(finanzas.tipoDia)}
           </span>
         </div>
         <div className="flex flex-col gap-1 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">

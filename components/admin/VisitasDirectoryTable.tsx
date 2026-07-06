@@ -1,18 +1,26 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
+  CalendarDays,
+  CircleDollarSign,
+  CircleDot,
   ClipboardList,
   Clock,
   Eye,
+  Layers,
   Package,
   RefreshCw,
   Search,
+  Stethoscope,
+  Users,
 } from "lucide-react";
+import { VisitaAdminActions } from "@/components/admin/VisitaAdminActions";
 import { VisitaDetailDialog } from "@/components/admin/VisitaDetailDialog";
 import { VisitaFinanzasTableActions } from "@/components/admin/VisitaFinanzasTableActions";
 import { VisitasDirectoryTableSkeleton } from "@/components/skeletons/dashboard-skeletons";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,16 +31,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { ToastKind } from "@/components/ui/use-toast";
 import type { VisitaDetailDto, VisitaListItemDto } from "@/lib/api/types";
 import {
-  formatPacienteServicioEstado,
   formatVisitaDuracion,
   getPacienteInitials,
   getPacienteNombre,
   getVisitaInsumosCount,
 } from "@/lib/visitas-display";
-import { visitaEstadoBadgeClass } from "@/lib/medical-ui-classes";
+import {
+  formatVisitaEstado,
+  formatVisitaEstadoContextual,
+  visitaEstadoBadgeClass,
+  visitaEstadoBadgeClassContextual,
+} from "@/lib/visita-estado-labels";
 import { cn } from "@/lib/utils";
+import { puedeCancelarVisita, puedeEliminarVisita } from "@/lib/visitas-access";
 
 /** Formatea solo la fecha (sin hora) */
 function formatDate(iso: string): string {
@@ -59,10 +73,8 @@ function formatTime(iso: string): string {
   }
 }
 
-function TableScrollArea({ children }: { children: ReactNode }) {
-  return (
-    <div className="overflow-x-auto">{children}</div>
-  );
+function VisitasTable({ children }: { children: ReactNode }) {
+  return <Table className="min-w-[980px]">{children}</Table>;
 }
 
 export type VisitasDirectoryTableProps = {
@@ -71,28 +83,67 @@ export type VisitasDirectoryTableProps = {
   loading: boolean;
   error: string;
   accessToken: string | null;
+  esAdmin?: boolean;
   onRetry: () => void;
   onVisitaUpdated?: (visita: VisitaDetailDto) => void;
+  onVisitaDeleted?: (visitaId: number) => void;
+  onVisitaCanceled?: (visita: VisitaDetailDto) => void;
+  onNotify?: (message: string, kind: ToastKind, description?: string) => void;
 };
 
 const thClass =
-  "px-4 py-3 text-xs font-bold uppercase tracking-wide text-medical-primaryDark first:pl-6 last:pr-5 sm:px-5";
+  "h-11 px-4 text-xs font-medium text-muted-foreground first:pl-6 last:pr-6 sm:px-5";
 const tdClass =
-  "px-4 py-4 align-middle first:pl-6 last:pr-5 sm:px-5";
+  "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5";
 
-function TableHeaderRow() {
+function ColumnHeader({
+  icon: Icon,
+  label,
+  className,
+  align = "left",
+}: {
+  icon: ElementType;
+  label: string;
+  className?: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <TableHead className={cn(thClass, className)}>
+      <span
+        className={cn(
+          "inline-flex items-center gap-2",
+          align === "right" && "w-full justify-end"
+        )}
+      >
+        <Icon className="size-4 shrink-0 opacity-70" aria-hidden />
+        {label}
+      </span>
+    </TableHead>
+  );
+}
+
+function TableHeaderRow({ showActions }: { showActions: boolean }) {
   return (
     <TableHeader>
-      <TableRow className="bg-medical-secondary/90 hover:bg-medical-secondary/90">
-        <TableHead className={thClass}>Paciente</TableHead>
-        <TableHead className={cn(thClass, "hidden md:table-cell")}>Prestador</TableHead>
-        <TableHead className={cn(thClass, "hidden sm:table-cell")}>Fecha</TableHead>
-        <TableHead className={thClass}>Duración</TableHead>
-        <TableHead className={cn(thClass, "hidden lg:table-cell")}>Prestación</TableHead>
-        <TableHead className={cn(thClass, "text-right")}>Seguimiento</TableHead>
-        <TableHead className={cn(thClass, "w-10 text-right")}>
-          <span className="sr-only">Detalle</span>
-        </TableHead>
+      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+        <ColumnHeader icon={Users} label="Paciente" />
+        <ColumnHeader icon={Stethoscope} label="Prestador" className="hidden md:table-cell" />
+        <ColumnHeader icon={CalendarDays} label="Fecha" className="hidden sm:table-cell" />
+        <ColumnHeader icon={Clock} label="Duración" />
+        <ColumnHeader icon={CircleDot} label="Estado" />
+        <ColumnHeader icon={Layers} label="Prestación" className="hidden lg:table-cell" />
+        <ColumnHeader
+          icon={CircleDollarSign}
+          label="Cobro"
+          className="text-right"
+          align="right"
+        />
+        <ColumnHeader icon={Eye} label="Detalle" className="w-12 text-right" align="right" />
+        {showActions ? (
+          <TableHead className={cn(thClass, "w-12 text-right")}>
+            <span className="sr-only">Acciones</span>
+          </TableHead>
+        ) : null}
       </TableRow>
     </TableHeader>
   );
@@ -104,11 +155,16 @@ export function VisitasDirectoryTable({
   loading,
   error,
   accessToken,
+  esAdmin = false,
   onRetry,
   onVisitaUpdated,
+  onVisitaDeleted,
+  onVisitaCanceled,
+  onNotify,
 }: VisitasDirectoryTableProps) {
   const [detailTarget, setDetailTarget] = useState<VisitaListItemDto | null>(null);
   const [rows, setRows] = useState<VisitaListItemDto[]>(filteredItems);
+  const showActions = esAdmin && Boolean(accessToken);
 
   useEffect(() => {
     setRows(filteredItems);
@@ -128,20 +184,44 @@ export function VisitasDirectoryTable({
     );
     if (detailTarget?.id === updated.id) {
       setDetailTarget((prev) =>
-        prev ? { ...prev, finanzas: updated.finanzas ?? prev.finanzas } : prev
+        prev ? { ...prev, ...updated, finanzas: updated.finanzas ?? prev.finanzas } : prev
       );
     }
     onVisitaUpdated?.(updated);
   };
 
+  const handleVisitaDeleted = (visitaId: number) => {
+    setRows((prev) => prev.filter((row) => row.id !== visitaId));
+    if (detailTarget?.id === visitaId) {
+      setDetailTarget(null);
+    }
+    onVisitaDeleted?.(visitaId);
+  };
+
+  const handleVisitaCanceled = (updated: VisitaDetailDto) => {
+    setRows((prev) =>
+      prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row))
+    );
+    if (detailTarget?.id === updated.id) {
+      setDetailTarget((prev) => (prev ? { ...prev, ...updated } : prev));
+    }
+    onVisitaCanceled?.(updated);
+  };
+
+  const handleVisitaNotFound = () => {
+    if (detailTarget) {
+      setRows((prev) => prev.filter((row) => row.id !== detailTarget.id));
+      setDetailTarget(null);
+      onVisitaDeleted?.(detailTarget.id);
+    }
+  };
+
   if (loading) {
     return (
-      <TableScrollArea>
-        <Table className="min-w-[920px]">
-          <TableHeaderRow />
-          <VisitasDirectoryTableSkeleton rows={6} cellClassName={tdClass} />
-        </Table>
-      </TableScrollArea>
+      <VisitasTable>
+        <TableHeaderRow showActions={showActions} />
+        <VisitasDirectoryTableSkeleton rows={6} cellClassName={tdClass} />
+      </VisitasTable>
     );
   }
 
@@ -199,98 +279,106 @@ export function VisitasDirectoryTable({
         visita={detailTarget}
         onClose={() => setDetailTarget(null)}
       />
-      <TableScrollArea>
-        <Table className="min-w-[920px]">
-          <TableHeaderRow />
-          <TableBody>
-            {rows.map((visita, index) => {
-              const doc = visita.pacienteServicio?.paciente?.numeroDocumento;
-              const servicioNombre = visita.pacienteServicio?.servicio?.nombre;
-              const estado = visita.pacienteServicio?.estado;
-              const insumoCount = getVisitaInsumosCount(visita);
+      <VisitasTable>
+        <TableHeaderRow showActions={showActions} />
+        <TableBody>
+          {rows.map((visita) => {
+            const doc = visita.pacienteServicio?.paciente?.numeroDocumento;
+            const servicioNombre = visita.pacienteServicio?.servicio?.nombre;
+            const insumoCount = getVisitaInsumosCount(visita);
 
-              return (
-                <TableRow
-                  key={visita.id}
-                  className={cn(
-                    "cursor-pointer transition-colors hover:bg-medical-secondary/50",
-                    index % 2 === 1 && "bg-medical-secondary/20"
-                  )}
-                  onClick={() => setDetailTarget(visita)}
-                >
-                  {/* Paciente */}
-                  <TableCell className={tdClass}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-medical-secondary to-white text-xs font-bold text-medical-primary ring-1 ring-medical-primary/12">
-                        {getPacienteInitials(visita)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-medical-text leading-snug">
-                          {getPacienteNombre(visita)}
-                        </p>
-                        <p className="text-xs text-medical-mutedText">
-                          {doc ? `DNI ${doc}` : "Sin documento"}
-                        </p>
-                        {/* Insumos pill — visible en todos los tamaños */}
-                        {insumoCount > 0 ? (
-                          <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-medical-mutedText">
-                            <Package className="size-3 shrink-0" />
-                            {insumoCount} insumo{insumoCount === 1 ? "" : "s"}
-                          </span>
-                        ) : null}
-                      </div>
+            return (
+              <TableRow key={visita.id}>
+                {/* Paciente */}
+                <TableCell className={tdClass}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {getPacienteInitials(visita)}
                     </div>
-                  </TableCell>
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium leading-none text-foreground">
+                        {getPacienteNombre(visita)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {doc ? `DNI ${doc}` : "Sin documento"}
+                      </p>
+                      {insumoCount > 0 ? (
+                        <Badge variant="outline" className="gap-1 font-normal text-muted-foreground">
+                          <Package className="size-3" />
+                          {insumoCount} insumo{insumoCount === 1 ? "" : "s"}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                </TableCell>
 
-                  {/* Prestador */}
-                  <TableCell className={cn(tdClass, "hidden md:table-cell")}>
-                    <p className="font-medium text-medical-text leading-snug">
+                {/* Prestador */}
+                <TableCell className={cn(tdClass, "hidden md:table-cell")}>
+                  <div className="space-y-1">
+                    <p className="font-medium leading-none text-foreground">
                       {visita.prestador?.nombre ?? "—"}
                     </p>
-                    <p className="mt-0.5 truncate text-xs text-medical-mutedText">
+                    <p className="truncate text-xs text-muted-foreground">
                       {visita.prestador?.email ?? ""}
                     </p>
-                  </TableCell>
+                  </div>
+                </TableCell>
 
-                  {/* Fecha */}
-                  <TableCell className={cn(tdClass, "hidden sm:table-cell")}>
-                    <p className="text-sm font-medium text-medical-text">
+                {/* Fecha */}
+                <TableCell className={cn(tdClass, "hidden sm:table-cell")}>
+                  <div className="space-y-1">
+                    <p className="font-medium leading-none text-foreground">
                       {formatDate(visita.fecha)}
                     </p>
-                    <p className="mt-0.5 text-xs text-medical-mutedText">
-                      {formatTime(visita.fecha)}
-                    </p>
-                  </TableCell>
+                    <p className="text-xs text-muted-foreground">{formatTime(visita.fecha)}</p>
+                  </div>
+                </TableCell>
 
-                  {/* Duración */}
-                  <TableCell className={tdClass}>
-                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-medical-primary/20 bg-medical-secondary px-2.5 py-1 text-xs font-semibold text-medical-primaryDark">
-                      <Clock className="size-3.5 shrink-0" />
+                {/* Duración */}
+                <TableCell className={tdClass}>
+                  <div className="flex items-center">
+                    <Badge variant="secondary" className="gap-1 font-normal">
+                      <Clock className="size-3" />
                       {formatVisitaDuracion(visita.tiempoMinutos)}
-                    </span>
-                  </TableCell>
+                    </Badge>
+                  </div>
+                </TableCell>
 
-                  {/* Prestación */}
-                  <TableCell className={cn(tdClass, "hidden lg:table-cell")}>
-                    {servicioNombre ? (
-                      <p className="text-sm font-medium text-medical-text">{servicioNombre}</p>
-                    ) : (
-                      <span className="text-sm text-medical-mutedText">—</span>
+                {/* Estado */}
+                <TableCell className={tdClass}>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "font-normal",
+                      visitaEstadoBadgeClassContextual({
+                        estado: visita.estado,
+                        cierreAutomatico: visita.cierreAutomatico,
+                        cierrePorRelevo: visita.cierrePorRelevo,
+                      })
                     )}
-                    {estado ? (
-                      <span
-                        className={cn(
-                          "mt-1.5 inline-block rounded-md border px-2 py-0.5 text-xs font-semibold",
-                          visitaEstadoBadgeClass(estado)
-                        )}
-                      >
-                        {formatPacienteServicioEstado(estado)}
-                      </span>
-                    ) : null}
-                  </TableCell>
+                  >
+                    {formatVisitaEstadoContextual({
+                      estado: visita.estado,
+                      cierreAutomatico: visita.cierreAutomatico,
+                      cierrePorRelevo: visita.cierrePorRelevo,
+                    })}
+                  </Badge>
+                </TableCell>
 
-                  {/* Cobro */}
-                  <TableCell className={cn(tdClass, "text-right align-top")}>
+                {/* Prestación */}
+                <TableCell className={cn(tdClass, "hidden lg:table-cell")}>
+                  <div className="space-y-1.5">
+                    {servicioNombre ? (
+                      <p className="font-medium leading-none text-foreground">{servicioNombre}</p>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </TableCell>
+
+                {/* Seguimiento */}
+                <TableCell className={cn(tdClass, "text-right")}>
+                  <div className="flex min-h-8 items-center justify-end">
                     {accessToken ? (
                       <VisitaFinanzasTableActions
                         visitaId={visita.id}
@@ -299,30 +387,53 @@ export function VisitasDirectoryTable({
                         onUpdated={handleFinanzasUpdated}
                       />
                     ) : (
-                      <span className="text-xs text-medical-mutedText">—</span>
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
-                  </TableCell>
+                  </div>
+                </TableCell>
 
-                  {/* Detalle */}
-                  <TableCell className={cn(tdClass, "text-right")}>
-                    <button
+                {/* Detalle */}
+                <TableCell className={cn(tdClass, "text-right")}>
+                  <div className="flex min-h-8 items-center justify-end">
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       aria-label="Ver detalles de la visita"
-                      className="rounded-lg p-1.5 cursor-pointer text-medical-mutedText transition-colors hover:bg-medical-primary/10 hover:text-medical-primary"
+                      className="size-8 shrink-0 text-muted-foreground"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDetailTarget(visita);
                       }}
                     >
                       <Eye className="size-4" />
-                    </button>
+                    </Button>
+                  </div>
+                </TableCell>
+
+                {showActions && accessToken ? (
+                  <TableCell className={cn(tdClass, "text-right")}>
+                    {puedeEliminarVisita(visita, esAdmin) ||
+                    puedeCancelarVisita(visita, esAdmin) ? (
+                      <VisitaAdminActions
+                        visita={visita}
+                        accessToken={accessToken}
+                        esAdmin={esAdmin}
+                        onDeleted={handleVisitaDeleted}
+                        onCanceled={handleVisitaCanceled}
+                        onNotFound={handleVisitaNotFound}
+                        onNotify={onNotify}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableScrollArea>
+                ) : null}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </VisitasTable>
     </>
   );
 }

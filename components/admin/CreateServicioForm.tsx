@@ -25,6 +25,10 @@ import {
   TIPOS_DIA,
   TIPOS_JORNADA,
 } from "@/lib/servicios-tarifas-labels";
+import {
+  servicioModoVisitaToFlags,
+  type ServicioModoVisitaFormValue,
+} from "@/lib/servicios-display";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -34,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ServicioModoVisitaSelector } from "@/components/admin/ServicioModoVisitaSelector";
 import { ToastStack } from "@/components/ui/toast-stack";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -86,13 +91,17 @@ function toPayload(
   nombre: string,
   descripcion: string,
   estado: boolean,
+  modoVisita: ServicioModoVisitaFormValue,
   tarifas: TarifaFormRow[]
 ): CreateServicioBody {
   const desc = descripcion.trim();
+  const { controlHorario, modoRelevo } = servicioModoVisitaToFlags(modoVisita);
   return {
     nombre: nombre.trim(),
     ...(desc ? { descripcion: desc } : {}),
     estado,
+    ...(controlHorario ? { controlHorario: true } : {}),
+    ...(modoRelevo ? { modoRelevo: true } : {}),
     tarifas: tarifas.map(
       (t): CreateServicioTarifaBody => ({
         modalidadCobro: t.modalidadCobro,
@@ -116,10 +125,12 @@ export function CreateServicioForm({
   onCancel,
 }: CreateServicioFormProps) {
   const estadoSwitchId = useId();
+  const modoVisitaFieldName = useId();
   const { toasts, showToast, dismiss } = useToast();
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [estado, setEstado] = useState(true);
+  const [modoVisita, setModoVisita] = useState<ServicioModoVisitaFormValue>("registro_unico");
   const [tarifas, setTarifas] = useState<TarifaFormRow[]>(() => [newTarifaRow()]);
   const [loading, setLoading] = useState(false);
 
@@ -154,7 +165,7 @@ export function CreateServicioForm({
     try {
       const created = await createServicioWithApi(
         accessToken,
-        toPayload(nombre, descripcion, estado, tarifas)
+        toPayload(nombre, descripcion, estado, modoVisita, tarifas)
       );
       await delayRemaining(DEFAULT_MIN_LOADING_MS, startedAt);
       onSuccess(created);
@@ -243,6 +254,13 @@ export function CreateServicioForm({
                 Servicio activo al crear
               </Label>
             </div>
+
+            <ServicioModoVisitaSelector
+              name={modoVisitaFieldName}
+              value={modoVisita}
+              onChange={setModoVisita}
+              disabled={loading}
+            />
           </fieldset>
 
           <fieldset className="space-y-4" disabled={loading}>

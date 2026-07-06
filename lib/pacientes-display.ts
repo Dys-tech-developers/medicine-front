@@ -45,6 +45,11 @@ export function formatPacienteObraSocial(
   return base;
 }
 
+export function formatPacienteLocalidad(localidad?: string | null): string {
+  const nombre = localidad?.trim();
+  return nombre || "—";
+}
+
 export function matchesPacienteSearch(paciente: PacienteListItemDto, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -55,6 +60,8 @@ export function matchesPacienteSearch(paciente: PacienteListItemDto, query: stri
     paciente.codigoQr,
     paciente.telefono,
     paciente.direccion,
+    formatPacienteLocalidad(paciente.localidad),
+    paciente.localidad,
     paciente.numeroAfiliado,
     formatPacienteSexo(paciente.sexo),
     formatPacienteObraSocial(paciente.obraSocial),

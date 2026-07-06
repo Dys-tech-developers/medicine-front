@@ -3,6 +3,8 @@
  * Usar en lugar de `emerald-*`, `amber-*`, `slate-*` y `red-*` genéricos para estados UI.
  */
 
+import { visitaEstadoBadgeClass as visitaEstadoBadgeClassFromLabels } from "@/lib/visita-estado-labels";
+
 export const MEDICAL_UI = {
   overlay: "bg-medical-text/60 backdrop-blur-[2px]",
   overlaySm: "bg-medical-text/55 backdrop-blur-sm",
@@ -71,6 +73,26 @@ export const medicalWarningButtonSolid =
 export const medicalDangerButtonSolid =
   "bg-medical-danger cursor-pointer text-white hover:bg-medical-danger/90";
 
+/** Modo relevo / cobertura continua — badge y bloques informativos */
+export const medicalRelevoBadge =
+  "border-medical-primary/30 bg-medical-secondary text-medical-primary";
+
+/** Panel admin de tramos relevo (ficha paciente) */
+export const medicalRelevoPanel =
+  "border-t border-medical-border/50 bg-medical-secondary/70";
+
+export const medicalRelevoPanelTitle = "text-medical-primaryDark";
+
+/** Banner de cuidadora activa en cobertura */
+export const medicalRelevoCoberturaBanner =
+  "rounded-lg border border-medical-border bg-medical-card px-3 py-2.5";
+
+export const medicalRelevoCoberturaIcon = "text-medical-primary";
+
+/** Header de modal relevo (misma marca que CTAs principales) */
+export const medicalRelevoModalHeader =
+  "border-medical-primary/30 bg-medical-primary text-white";
+
 /** Asterisco o etiqueta de campo obligatorio */
 export const medicalRequiredMark = "text-medical-danger";
 
@@ -96,5 +118,5 @@ export function asignacionEstadoBadgeClass(estado: string): string {
 }
 
 export function visitaEstadoBadgeClass(estado: string): string {
-  return asignacionEstadoBadgeClass(estado);
+  return visitaEstadoBadgeClassFromLabels(estado);
 }

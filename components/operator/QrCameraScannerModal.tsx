@@ -70,9 +70,10 @@ export function QrCameraScannerModal({ onClose, onDecoded }: QrCameraScannerModa
       void finish(decodedText);
     };
 
+    const noop = () => {};
+
     (async () => {
       try {
-        // Evita doble cámara en desarrollo (React Strict Mode) y en reaperturas rápidas.
         await stopScanner(activeScanner);
         activeScanner = null;
 
@@ -83,32 +84,59 @@ export function QrCameraScannerModal({ onClose, onDecoded }: QrCameraScannerModa
 
         if (cancelled) return;
 
-        // Primero intentamos con facingMode para maximizar compatibilidad móvil.
-        try {
-          await html5.start({ facingMode: "environment" }, scanConfig, onDecode, () => {});
-          return;
-        } catch {
-          // Fallback por id de cámara para navegadores que no respetan facingMode.
+        const isMobile =
+          typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+        const facingModes = isMobile
+          ? (["environment", "user"] as const)
+          : (["user", "environment"] as const);
+
+        for (const facingMode of facingModes) {
+          try {
+            await html5.start({ facingMode }, scanConfig, onDecode, noop);
+            return;
+          } catch {
+            await stopScanner(html5);
+          }
         }
 
         const cameras = await Html5Qrcode.getCameras();
         if (cancelled) return;
         if (cameras.length === 0) {
           setError("No se detectó ninguna cámara en este dispositivo.");
-          setStarting(false);
           return;
         }
 
         const preferred =
-          cameras.find((c) => /back|rear|environment|trasera|posterior/i.test(c.label)) ??
-          cameras[0];
+          cameras.find((c) =>
+            isMobile
+              ? /back|rear|environment|trasera|posterior/i.test(c.label)
+              : /user|front|integrated|facetime|built.?in|webcam|isight/i.test(c.label)
+          ) ?? cameras[0];
 
-        await html5.start(preferred.id, scanConfig, onDecode, () => {});
-      } catch {
+        await html5.start(preferred.id, scanConfig, onDecode, noop);
+      } catch (err) {
         if (!cancelled) {
-          setError(
-            "No pudimos usar la cámara. Permití el permiso del navegador. Si abrís desde red local, probá con HTTPS."
-          );
+          const name =
+            err && typeof err === "object" && "name" in err && typeof err.name === "string"
+              ? err.name
+              : "";
+          if (name === "NotFoundError") {
+            setError(
+              "El navegador no encuentra ninguna cámara. Probá abrir Photo Booth o FaceTime para verificar que funcione, y revisá Ajustes → Privacidad → Cámara."
+            );
+          } else if (name === "NotAllowedError") {
+            setError(
+              "Permiso de cámara denegado. En la barra de direcciones → candado → Cámara → Permitir."
+            );
+          } else if (!window.isSecureContext) {
+            setError(
+              "Usá http://localhost:3000 (no la IP de la red) o HTTPS para que el navegador permita la cámara."
+            );
+          } else {
+            setError(
+              "No pudimos usar la cámara. Cerrá otras apps que la usen (Zoom, Teams) y recargá la página."
+            );
+          }
         }
       } finally {
         if (!cancelled) setStarting(false);

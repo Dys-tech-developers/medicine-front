@@ -11,6 +11,7 @@ type UseVisitasListOptions = {
   pageSize?: number;
   prestadorId?: number;
   pacienteServicioId?: number;
+  pacienteId?: number;
   fechaDesde?: Date;
   fechaHasta?: Date;
   minLoadingMs?: number;
@@ -23,6 +24,7 @@ export function useVisitasList({
   pageSize = 20,
   prestadorId,
   pacienteServicioId,
+  pacienteId,
   fechaDesde,
   fechaHasta,
   minLoadingMs,
@@ -36,6 +38,7 @@ export function useVisitasList({
       pageSize,
       prestadorId,
       pacienteServicioId,
+      pacienteId,
       fechaDesde: fechaDesde?.toISOString(),
       fechaHasta: fechaHasta?.toISOString(),
     },
@@ -44,7 +47,11 @@ export function useVisitasList({
     fetcher: () => {
       const query: ListVisitasOptions = { page, pageSize };
       if (prestadorId != null) query.prestadorId = prestadorId;
-      if (pacienteServicioId != null) query.pacienteServicioId = pacienteServicioId;
+      if (pacienteServicioId != null) {
+        query.pacienteServicioId = pacienteServicioId;
+      } else if (pacienteId != null) {
+        query.pacienteId = pacienteId;
+      }
       if (fechaDesde) query.fechaDesde = fechaDesde;
       if (fechaHasta) query.fechaHasta = fechaHasta;
       return listVisitasWithApi(accessToken!, query).then((data) => ({

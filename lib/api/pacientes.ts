@@ -1,7 +1,15 @@
 import { apiFetch } from "@/lib/api/client";
+import { fetchAllPaginatedItems } from "@/lib/api/list-pagination";
 import { listObrasSocialesWithApi } from "@/lib/api/obras-sociales";
+import {
+  normalizeDisponibilidadFromRow,
+  normalizePeriodoControlFromRow,
+  resolveCantidadHorasFromRow,
+  resolveCantidadPermitidaFromRow,
+} from "@/lib/paciente-servicio-display";
 import type {
   CreatePacienteBody,
+  LocalidadDto,
   ModalidadCobro,
   ObraSocialResumenDto,
   PacienteDto,
@@ -11,18 +19,38 @@ import type {
   PacienteServicioAsignadoQrDto,
   PacienteServicioEstado,
   PaginatedPacientesDto,
-  FrecuenciaTipo,
   PacienteServicioTarifaDto,
-  TipoDia,
   TipoJornada,
   UpdatePacienteBody,
 } from "@/lib/api/types";
+import { normalizeTipoDia } from "@/lib/servicios-tarifas-labels";
+import { normalizeReglasAsignacion } from "@/lib/reglas-asignacion";
 
 type PacienteRaw = Partial<PacienteListItemDto> &
   Record<string, unknown> & {
     obra_social?: Partial<ObraSocialResumenDto>;
     obra_social_id?: number;
+    localidad_id?: string | number;
+    localidad?: Partial<LocalidadDto> | string | null;
   };
+
+function normalizeLocalidadResumen(
+  raw: unknown,
+  fallbackId?: string
+): LocalidadDto | null {
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    const id = String(o.id ?? o.codigo ?? fallbackId ?? "").trim();
+    const nombre = String(o.nombre ?? o.descripcion ?? "").trim();
+    if (id && nombre) return { id, nombre };
+    if (id) return { id, nombre: nombre || id };
+    return null;
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    return { id: fallbackId ?? raw.trim(), nombre: raw.trim() };
+  }
+  return null;
+}
 
 function normalizeObraSocialResumen(
   raw: unknown
@@ -58,6 +86,11 @@ export function normalizePaciente(item: PacienteRaw): PacienteListItemDto {
       ? { ...obraSocial, id: obraSocialId }
       : obraSocial;
 
+  const localidad =
+    typeof item.localidad === "string"
+      ? item.localidad.trim()
+      : normalizeLocalidadResumen(item.localidad)?.nombre?.trim() ?? "";
+
   return {
     id: Number(item.id),
     nombre: String(item.nombre ?? ""),
@@ -68,6 +101,7 @@ export function normalizePaciente(item: PacienteRaw): PacienteListItemDto {
     sexo: (item.sexo as PacienteListItemDto["sexo"]) ?? "X",
     telefono: String(item.telefono ?? ""),
     direccion: String(item.direccion ?? ""),
+    localidad,
     obraSocialId: obraSocialId ?? obraSocialResolved?.id,
     obraSocial: obraSocialResolved ?? null,
     numeroAfiliado: String(item.numeroAfiliado ?? item.numero_afiliado ?? ""),
@@ -95,10 +129,12 @@ async function enrichPacientesObraSocial(
   if (!needsEnrich) return items;
 
   try {
-    const { items: obras } = await listObrasSocialesWithApi(token, {
-      page: 1,
-      pageSize: 500,
-    });
+    const obras = await fetchAllPaginatedItems((page, pageSize) =>
+      listObrasSocialesWithApi(token, { page, pageSize }).then((data) => ({
+        items: data.items,
+        total: data.total,
+      }))
+    );
     const byId = new Map(
       obras.map((o) => [
         o.id,
@@ -142,6 +178,18 @@ export async function listPacientesWithApi(
   const normalized = normalizeList(data);
   const items = await enrichPacientesObraSocial(token, normalized.items);
   return { ...normalized, items };
+}
+
+/** Listado completo para exportación (enriquece obra social si hace falta). */
+export async function listPacientesAllWithApi(
+  token: string
+): Promise<PacienteListItemDto[]> {
+  return fetchAllPaginatedItems((page, pageSize) =>
+    listPacientesWithApi(token, page, pageSize).then((data) => ({
+      items: data.items,
+      total: data.total,
+    }))
+  );
 }
 
 function normalizePacienteDto(data: unknown): PacienteDto {
@@ -232,51 +280,136 @@ function normalizePacienteServicioAsignadoQr(
     row.servicioNombre ?? row.servicio_nombre ?? row.nombre ?? ""
   ).trim();
   const modalidadRaw = row.modalidadCobro ?? row.modalidad_cobro;
-  const frecuenciaTipoRaw = row.frecuenciaTipo ?? row.frecuencia_tipo;
   const estadoRaw = row.estado;
   const disponibilidadRaw = row.disponibilidad as Record<string, unknown> | undefined;
-  const cantidadUtilizada = Number(disponibilidadRaw?.cantidadUtilizada ?? 0);
-  const cantidadPermitida = Number(disponibilidadRaw?.cantidadPermitida ?? 0);
-  const cantidadDisponibleRaw = disponibilidadRaw?.cantidadDisponible;
-  const periodoControlRaw = disponibilidadRaw?.periodoControl;
+  const modalidadCobro = String(modalidadRaw ?? "por_servicio") as ModalidadCobro;
+  const periodoControl = normalizePeriodoControlFromRow(row);
+  const cantidadPermitida = resolveCantidadPermitidaFromRow(row);
+  const cantidadHoras = resolveCantidadHorasFromRow(row, modalidadCobro);
+  const disponibilidad = normalizeDisponibilidadFromRow(
+    disponibilidadRaw,
+    cantidadPermitida,
+    pacienteServicioId
+  );
 
-  const normalizedFrecuenciaTipo = (() => {
-    const direct = String(frecuenciaTipoRaw ?? "").trim();
-    if (direct === "diaria" || direct === "semanal" || direct === "mensual" || direct === "por_horas") {
-      return direct as FrecuenciaTipo;
-    }
-    const fromPeriodo = String(periodoControlRaw ?? "").trim();
-    if (
-      fromPeriodo === "diaria" ||
-      fromPeriodo === "semanal" ||
-      fromPeriodo === "mensual" ||
-      fromPeriodo === "por_horas"
-    ) {
-      return fromPeriodo as FrecuenciaTipo;
-    }
-    return "diaria";
-  })();
+  const prestadorRaw = row.prestador as Record<string, unknown> | undefined;
+  const prestadorIdRaw = row.prestadorId ?? row.prestador_id ?? prestadorRaw?.id;
+  const prestadorId =
+    prestadorIdRaw != null && Number.isFinite(Number(prestadorIdRaw))
+      ? Number(prestadorIdRaw)
+      : undefined;
 
-  if (process.env.NODE_ENV !== "production") {
-    // Debug temporal para validar discrepancias entre frecuenciaTipo y periodoControl.
-    console.log("[paciente-servicio] payload disponibilidad", {
-      pacienteServicioId,
-      servicioId,
-      frecuenciaTipoRaw,
-      frecuenciaTipoNormalizado: normalizedFrecuenciaTipo,
-      periodoControlRaw,
-      disponibilidadRaw,
-      row,
-    });
-  }
+  const controlHorario = Boolean(row.controlHorario ?? row.control_horario ?? false);
+  const modoRelevo = Boolean(row.modoRelevo ?? row.modo_relevo ?? false);
+  const reglasAsignacion = normalizeReglasAsignacion(
+    row.reglasAsignacion ?? row.reglas_asignacion,
+    { modoRelevo, controlHorario }
+  );
+
+  const coberturaDiariaInicioRaw = row.coberturaDiariaInicio ?? row.cobertura_diaria_inicio;
+  const coberturaDiariaFinRaw = row.coberturaDiariaFin ?? row.cobertura_diaria_fin;
+  const coberturaDiariaInicio =
+    coberturaDiariaInicioRaw != null && String(coberturaDiariaInicioRaw).trim()
+      ? String(coberturaDiariaInicioRaw)
+      : null;
+  const coberturaDiariaFin =
+    coberturaDiariaFinRaw != null && String(coberturaDiariaFinRaw).trim()
+      ? String(coberturaDiariaFinRaw)
+      : null;
+
+  const prestadoresAsignadosRaw = row.prestadoresAsignados ?? row.prestadores_asignados;
+  const prestadoresAsignados = Array.isArray(prestadoresAsignadosRaw)
+    ? prestadoresAsignadosRaw
+        .map((p) => {
+          const item = p as Record<string, unknown>;
+          const id = Number(item.id);
+          const nombre = String(item.nombre ?? "").trim();
+          if (!Number.isFinite(id) || id <= 0 || !nombre) return null;
+          return { id, nombre };
+        })
+        .filter((p): p is { id: number; nombre: string } => p != null)
+    : undefined;
+
+  const coberturaActivaRaw = row.coberturaActiva ?? row.cobertura_activa;
+  const coberturaActiva =
+    coberturaActivaRaw && typeof coberturaActivaRaw === "object"
+      ? (() => {
+          const c = coberturaActivaRaw as Record<string, unknown>;
+          const visitaId = Number(c.visitaId ?? c.visita_id);
+          const prestadorId = Number(c.prestadorId ?? c.prestador_id);
+          const prestadorNombre = String(c.prestadorNombre ?? c.prestador_nombre ?? "").trim();
+          const fechaInicio = String(c.fechaInicio ?? c.fecha_inicio ?? "");
+          if (
+            !Number.isFinite(visitaId) ||
+            visitaId <= 0 ||
+            !Number.isFinite(prestadorId) ||
+            prestadorId <= 0 ||
+            !fechaInicio
+          ) {
+            return null;
+          }
+          return { visitaId, prestadorId, prestadorNombre, fechaInicio };
+        })()
+      : coberturaActivaRaw === null
+        ? null
+        : undefined;
+
+  const visitaPendienteRaw = row.visitaPendiente ?? row.visita_pendiente;
+  const visitaPendiente =
+    visitaPendienteRaw && typeof visitaPendienteRaw === "object"
+      ? {
+          id: Number((visitaPendienteRaw as Record<string, unknown>).id),
+          fechaInicio: String(
+            (visitaPendienteRaw as Record<string, unknown>).fechaInicio ??
+              (visitaPendienteRaw as Record<string, unknown>).fecha_inicio ??
+              ""
+          ),
+          fechaLimite: (() => {
+            const fl =
+              (visitaPendienteRaw as Record<string, unknown>).fechaLimite ??
+              (visitaPendienteRaw as Record<string, unknown>).fecha_limite;
+            return fl != null ? String(fl) : null;
+          })(),
+        }
+      : undefined;
 
   return {
     pacienteServicioId,
     servicioId,
     servicioNombre: servicioNombre || `Servicio #${servicioId}`,
-    modalidadCobro: String(modalidadRaw ?? "por_servicio") as ModalidadCobro,
-    frecuenciaTipo: normalizedFrecuenciaTipo,
-    frecuenciaValor: Number(row.frecuenciaValor ?? row.frecuencia_valor ?? 1),
+    controlHorario,
+    ...(modoRelevo ? { modoRelevo: true } : {}),
+    reglasAsignacion,
+    ...(coberturaDiariaInicio != null || coberturaDiariaFin != null
+      ? { coberturaDiariaInicio, coberturaDiariaFin }
+      : {}),
+    ...(prestadoresAsignados && prestadoresAsignados.length > 0
+      ? { prestadoresAsignados }
+      : {}),
+    ...(coberturaActiva !== undefined ? { coberturaActiva } : {}),
+    ...(visitaPendiente != null &&
+    !modoRelevo &&
+    Number.isFinite(visitaPendiente.id) &&
+    visitaPendiente.id > 0 &&
+    visitaPendiente.fechaInicio
+      ? { visitaPendiente }
+      : {}),
+    ...(prestadorId != null
+      ? {
+          prestadorId,
+          prestador: prestadorRaw
+            ? {
+                id: Number(prestadorRaw.id ?? prestadorId),
+                nombre: String(prestadorRaw.nombre ?? ""),
+                email: String(prestadorRaw.email ?? ""),
+              }
+            : undefined,
+        }
+      : {}),
+    modalidadCobro,
+    periodoControl,
+    cantidadPermitida,
+    cantidadHoras,
     estado: String(estadoRaw ?? "activa") as PacienteServicioEstado,
     fechaInicio:
       row.fechaInicio != null || row.fecha_inicio != null
@@ -294,41 +427,12 @@ function normalizePacienteServicioAsignadoQr(
             id: Number(t.id),
             modalidadCobro: String(t.modalidadCobro ?? t.modalidad_cobro) as ModalidadCobro,
             tipoJornada: String(t.tipoJornada ?? t.tipo_jornada) as TipoJornada,
-            tipoDia: String(t.tipoDia ?? t.tipo_dia) as TipoDia,
+            tipoDia: normalizeTipoDia(String(t.tipoDia ?? t.tipo_dia)),
             valor: String(t.valor ?? ""),
           })
         )
       : undefined,
-    disponibilidad: disponibilidadRaw
-      ? {
-          periodoControl:
-            disponibilidadRaw.periodoControl != null
-              ? String(disponibilidadRaw.periodoControl)
-              : undefined,
-          inicioVentana:
-            disponibilidadRaw.inicioVentana != null
-              ? String(disponibilidadRaw.inicioVentana)
-              : undefined,
-          finVentana:
-            disponibilidadRaw.finVentana != null
-              ? String(disponibilidadRaw.finVentana)
-              : undefined,
-          fechaReferencia:
-            disponibilidadRaw.fechaReferencia != null
-              ? String(disponibilidadRaw.fechaReferencia)
-              : undefined,
-          cantidadUtilizada: Number.isFinite(cantidadUtilizada) ? cantidadUtilizada : 0,
-          cantidadPermitida: Number.isFinite(cantidadPermitida) ? cantidadPermitida : 0,
-          cantidadDisponible:
-            cantidadDisponibleRaw != null && Number.isFinite(Number(cantidadDisponibleRaw))
-              ? Number(cantidadDisponibleRaw)
-              : undefined,
-          utilizadoYPermitido:
-            disponibilidadRaw.utilizadoYPermitido != null
-              ? String(disponibilidadRaw.utilizadoYPermitido)
-              : undefined,
-        }
-      : undefined,
+    disponibilidad,
   };
 }
 

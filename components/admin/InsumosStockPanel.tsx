@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Boxes, Package, RefreshCw } from "lucide-react";
+import { Boxes, CalendarClock, Package, RefreshCw } from "lucide-react";
 import { StockListSkeleton } from "@/components/skeletons/dashboard-skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { InsumoListItemDto } from "@/lib/api/types";
@@ -12,6 +12,12 @@ import {
   stockLevelDotClass,
   stockLevelLabel,
 } from "@/lib/insumos-stock";
+import {
+  formatInsumoFechaVencimiento,
+  getInsumoDiasParaVencer,
+  getInsumoVencimientoStatus,
+  insumoVencimientoStatusLabel,
+} from "@/lib/insumos-vencimiento";
 import { cn } from "@/lib/utils";
 
 type InsumosStockPanelProps = {
@@ -40,36 +46,62 @@ const qtyColorClass: Record<StockLevel, string> = {
 function StockListItem({ insumo, index }: { insumo: InsumoListItemDto; index: number }) {
   const level = getStockLevel(insumo);
   const qty = insumo.cantidad ?? insumo.stockActual ?? 0;
+  const vencStatus = getInsumoVencimientoStatus(insumo);
+  const diasVenc = getInsumoDiasParaVencer(insumo);
 
   return (
     <li
       className={cn(
-        "flex items-center gap-4 border-l-2 px-5 py-3.5 transition-colors hover:bg-medical-secondary/40",
+        "flex items-center gap-3 border-l-2 px-4 py-3.5 transition-colors hover:bg-medical-secondary/40 sm:gap-4 sm:px-5",
         leftBorderClass[level],
         index % 2 === 1 && "bg-medical-secondary/10"
       )}
     >
-      {/* Info */}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-medical-text">{insumo.nombre}</p>
-        {insumo.unidad ? (
-          <p className="mt-0.5 text-xs text-medical-mutedText">{insumo.unidad}</p>
-        ) : null}
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {insumo.unidad ? (
+            <p className="text-xs text-medical-mutedText">{insumo.unidad}</p>
+          ) : null}
+          {vencStatus === "proximo" || vencStatus === "vencido" ? (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-xs font-semibold",
+                vencStatus === "vencido" ? "text-medical-danger" : "text-medical-warning"
+              )}
+            >
+              <CalendarClock className="size-3" />
+              {insumoVencimientoStatusLabel(vencStatus, diasVenc)}
+            </span>
+          ) : vencStatus === "ok" && insumo.fechaVencimiento ? (
+            <span className="text-xs text-medical-mutedText">
+              Vence {formatInsumoFechaVencimiento(insumo.fechaVencimiento)}
+            </span>
+          ) : null}
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 text-xs font-semibold sm:hidden",
+              qtyColorClass[level]
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", stockLevelDotClass(level))} />
+            {stockLevelLabel(level)}
+          </span>
+        </div>
       </div>
 
-      {/* Cantidad + badge */}
       <div className="shrink-0 text-right">
-        <p className={cn("text-lg font-bold leading-none", qtyColorClass[level])}>
+        <p className={cn("text-base font-bold tabular-nums leading-none sm:text-lg", qtyColorClass[level])}>
           {qty}
         </p>
         {insumo.stockMinimo != null ? (
-          <p className="mt-0.5 text-[10px] text-medical-mutedText">mín. {insumo.stockMinimo}</p>
+          <p className="mt-0.5 text-xs text-medical-mutedText">mín. {insumo.stockMinimo}</p>
         ) : null}
       </div>
 
       <span
         className={cn(
-          "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold",
+          "hidden shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold sm:inline-flex",
           stockLevelBadgeClass(level)
         )}
       >

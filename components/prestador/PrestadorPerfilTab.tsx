@@ -6,6 +6,8 @@ import {
   Building2,
   ClipboardList,
   IdCard,
+  Layers,
+  KeyRound,
   Loader2,
   Mail,
   RefreshCw,
@@ -13,12 +15,17 @@ import {
   User,
   UserCircle2,
 } from "lucide-react";
+import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
+import { UserProfileForm } from "@/components/account/UserProfileForm";
+import { ToastStack } from "@/components/ui/toast-stack";
+import { useToast } from "@/components/ui/use-toast";
 import { ApiError } from "@/lib/api/client";
 import { getPrestadorMeWithApi } from "@/lib/api/prestadores";
 import type { PrestadorListItemDto } from "@/lib/api/types";
 import {
   formatPrestadorCbu,
   formatPrestadorDateTime,
+  formatPrestadorServiciosList,
   formatRegimenIva,
   getPrestadorInitials,
 } from "@/lib/prestadores-display";
@@ -29,6 +36,8 @@ type Props = {
   accessToken: string | null;
   loggedAt?: string | null;
 };
+
+type PerfilSection = "cuenta" | "profesional" | "contrasena";
 
 function ProfileField({
   label,
@@ -181,6 +190,26 @@ function PrestadorProfileContent({
 
       <section className="mb-4">
         <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-medical-mutedText">
+          <Layers className="h-3.5 w-3.5 text-medical-primary" />
+          Servicios habilitados
+        </h3>
+        <dl className="grid grid-cols-1 gap-3">
+          <ProfileField
+            label="Prestaciones en tu perfil"
+            value={formatPrestadorServiciosList(prestador.servicios)}
+            className="sm:col-span-2"
+          />
+        </dl>
+        {!prestador.servicios?.length ? (
+          <p className="mt-2 text-xs text-medical-mutedText">
+            Todavía no tenés prestaciones habilitadas en tu perfil. No podés registrar visitas hasta
+            que un administrador te las asigne.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="mb-4">
+        <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-medical-mutedText">
           <Stethoscope className="h-3.5 w-3.5 text-medical-primary" />
           Identidad profesional
         </h3>
@@ -221,9 +250,11 @@ function PrestadorProfileContent({
 }
 
 export function PrestadorPerfilTab({ accessToken, loggedAt }: Props) {
+  const [section, setSection] = useState<PerfilSection>("cuenta");
   const [prestador, setPrestador] = useState<PrestadorListItemDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { toasts, showToast, dismiss } = useToast(3500);
 
   const loadProfile = useCallback(async () => {
     if (!accessToken) {
@@ -250,53 +281,115 @@ export function PrestadorPerfilTab({ accessToken, loggedAt }: Props) {
   }, [accessToken]);
 
   useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
+    if (section === "profesional") {
+      void loadProfile();
+    }
+  }, [loadProfile, section]);
+
+  const sections: { id: PerfilSection; label: string; icon: typeof UserCircle2 }[] = [
+    { id: "cuenta", label: "Cuenta", icon: UserCircle2 },
+    { id: "profesional", label: "Profesional", icon: Stethoscope },
+    { id: "contrasena", label: "Contraseña", icon: KeyRound },
+  ];
 
   return (
-    <section className="mb-5 rounded-2xl border border-medical-border bg-medical-card p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <UserCircle2 className="h-5 w-5 text-medical-primary" />
-          <div>
-            <h2 className="text-base font-semibold text-medical-text">Mi perfil</h2>
-            <p className="text-xs text-medical-mutedText">Datos de tu cuenta y perfil profesional.</p>
+    <>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
+
+      <section className="mb-5 rounded-2xl border border-medical-border bg-medical-card p-4 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <UserCircle2 className="h-5 w-5 text-medical-primary" />
+            <div>
+              <h2 className="text-base font-semibold text-medical-text">Mi perfil</h2>
+              <p className="text-xs text-medical-mutedText">
+                Tu cuenta, datos profesionales y seguridad.
+              </p>
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadProfile()}
-          disabled={loading || !accessToken}
-          className="inline-flex h-9 w-9 items-center cursor-pointer justify-center rounded-lg border border-medical-border text-medical-mutedText transition hover:bg-medical-secondary disabled:opacity-50"
-          aria-label="Actualizar perfil"
-        >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-        </button>
-      </div>
-
-      <div className="rounded-xl border border-medical-border bg-medical-surface p-4">
-        {loading && !prestador ? <PerfilSkeleton /> : null}
-
-        {error && !loading ? (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-medical-danger/10 text-medical-danger">
-              <IdCard className="h-5 w-5" />
-            </span>
-            <p className="text-sm text-medical-danger">{error}</p>
+          {section === "profesional" ? (
             <button
               type="button"
               onClick={() => void loadProfile()}
-              className="text-sm font-semibold text-medical-primary underline-offset-2 hover:underline"
+              disabled={loading || !accessToken}
+              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-medical-border text-medical-mutedText transition hover:bg-medical-secondary disabled:opacity-50"
+              aria-label="Actualizar perfil profesional"
             >
-              Reintentar
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
-        {!loading && prestador ? (
-          <PrestadorProfileContent prestador={prestador} loggedAt={loggedAt} />
-        ) : null}
-      </div>
-    </section>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {sections.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSection(id)}
+              className={cn(
+                "inline-flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
+                section === id
+                  ? "border-medical-primary bg-medical-secondary text-medical-primary"
+                  : "border-medical-border bg-white text-medical-mutedText hover:bg-medical-surface"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-medical-border bg-medical-surface p-4">
+          {section === "cuenta" && accessToken ? (
+            <UserProfileForm
+              accessToken={accessToken}
+              compact
+              onNotify={(message, kind) => showToast(message, kind)}
+            />
+          ) : null}
+
+          {section === "contrasena" && accessToken ? (
+            <ChangePasswordForm
+              accessToken={accessToken}
+              onNotify={(message, kind, description) =>
+                showToast(message, kind, description)
+              }
+            />
+          ) : null}
+
+          {section === "profesional" ? (
+            <>
+              {loading && !prestador ? <PerfilSkeleton /> : null}
+
+              {error && !loading ? (
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-medical-danger/10 text-medical-danger">
+                    <IdCard className="h-5 w-5" />
+                  </span>
+                  <p className="text-sm text-medical-danger">{error}</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadProfile()}
+                    className="text-sm font-semibold text-medical-primary underline-offset-2 hover:underline"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : null}
+
+              {!loading && prestador ? (
+                <PrestadorProfileContent prestador={prestador} loggedAt={loggedAt} />
+              ) : null}
+            </>
+          ) : null}
+
+          {!accessToken && (section === "cuenta" || section === "contrasena") ? (
+            <p className="py-6 text-center text-sm text-medical-danger">
+              Sesión no válida. Volvé a iniciar sesión.
+            </p>
+          ) : null}
+        </div>
+      </section>
+    </>
   );
 }

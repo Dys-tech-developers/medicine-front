@@ -59,7 +59,8 @@ export function formatVisitaTimeOnly(iso: string): string {
   }
 }
 
-export function formatVisitaDuracion(minutos: number): string {
+export function formatVisitaDuracion(minutos: number | null | undefined): string {
+  if (minutos == null || !Number.isFinite(minutos)) return "En curso";
   if (minutos < 60) return `${minutos} min`;
   const h = Math.floor(minutos / 60);
   const m = minutos % 60;
@@ -105,6 +106,7 @@ export function matchesVisitaSearch(visita: VisitaListItemDto, query: string): b
     p?.apellido,
     p?.numeroDocumento,
     ps?.servicio?.nombre,
+    visita.estado,
     ps?.estado,
     visita.prestador?.nombre,
     visita.prestador?.email,

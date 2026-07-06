@@ -1,14 +1,13 @@
-import type { FrecuenciaTipo, ModalidadCobro, PacienteServicioEstado } from "@/lib/api/types";
+import type { ModalidadCobro, PacienteServicioEstado, PeriodoControl } from "@/lib/api/types";
 
-export const FRECUENCIA_TIPOS: FrecuenciaTipo[] = ["diaria", "semanal", "mensual", "por_horas"];
+export const PERIODOS_CONTROL: PeriodoControl[] = ["diario", "semanal", "mensual"];
 
 export const ASIGNACION_ESTADOS: PacienteServicioEstado[] = ["activa", "suspendida", "finalizada"];
 
-export const FRECUENCIA_TIPO_LABELS: Record<FrecuenciaTipo, string> = {
-  diaria: "Diaria",
+export const PERIODO_CONTROL_LABELS: Record<PeriodoControl, string> = {
+  diario: "Diario",
   semanal: "Semanal",
   mensual: "Mensual",
-  por_horas: "Por horas",
 };
 
 export const ASIGNACION_ESTADO_LABELS: Record<PacienteServicioEstado, string> = {

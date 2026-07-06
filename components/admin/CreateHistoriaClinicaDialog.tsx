@@ -15,6 +15,7 @@ import {
   DEFAULT_MIN_LOADING_MS,
   delayRemaining,
 } from "@/lib/loading/minimum-duration";
+import { dateInputToIso, todayLocalDateInput } from "@/lib/date-input";
 import { getPacienteNombre } from "@/lib/pacientes-display";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -24,14 +25,6 @@ const inputClass =
 
 const textareaClass =
   "w-full rounded-xl border border-medical-border bg-medical-surface/80 px-3.5 py-2.5 text-sm text-medical-text outline-none transition placeholder:text-medical-mutedText/60 focus:border-medical-primary focus:bg-medical-card focus:ring-4 focus:ring-medical-primary/12 disabled:cursor-not-allowed disabled:opacity-60";
-
-function todayInputValue(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function dateInputToIso(date: string): string {
-  return new Date(`${date}T12:00:00.000Z`).toISOString();
-}
 
 type FormState = {
   fechaCreacion: string;
@@ -44,7 +37,7 @@ type FormState = {
 
 function emptyForm(): FormState {
   return {
-    fechaCreacion: todayInputValue(),
+    fechaCreacion: "",
     antecedentes: "",
     diagnosticoInicial: "",
     medicacion: "",
@@ -71,12 +64,44 @@ function toPayload(pacienteId: number, values: FormState): CreateHistoriaClinica
   return body;
 }
 
+function hasClinicalContent(values: FormState): boolean {
+  return [
+    values.antecedentes,
+    values.diagnosticoInicial,
+    values.medicacion,
+    values.alergias,
+    values.observaciones,
+  ].some((field) => field.trim().length > 0);
+}
+
+function validateHistoriaForm(values: FormState): string | null {
+  if (!values.fechaCreacion.trim()) return "La fecha de creación es obligatoria.";
+  const hoy = todayLocalDateInput();
+  if (values.fechaCreacion > hoy) {
+    return "La fecha de creación no puede ser posterior a hoy.";
+  }
+  if (!hasClinicalContent(values)) {
+    return "Completá al menos un dato clínico: antecedentes, diagnóstico, medicación, alergias u observaciones.";
+  }
+  return null;
+}
+
+function canSubmitHistoriaForm(values: FormState): boolean {
+  if (!values.fechaCreacion.trim()) return false;
+  if (values.fechaCreacion > todayLocalDateInput()) return false;
+  return hasClinicalContent(values);
+}
+
 type CreateHistoriaClinicaDialogProps = {
   open: boolean;
   paciente: PacienteListItemDto | null;
   accessToken: string | null;
   onClose: () => void;
   onSuccess: (historia: HistoriaClinicaDto) => void;
+  /** Etiqueta del botón secundario (ej. wizard post-alta). */
+  cancelLabel?: string;
+  /** Evita cerrar al hacer clic fuera (recomendado en wizard post-alta). */
+  closeOnBackdrop?: boolean;
 };
 
 export function CreateHistoriaClinicaDialog({
@@ -85,6 +110,8 @@ export function CreateHistoriaClinicaDialog({
   accessToken,
   onClose,
   onSuccess,
+  cancelLabel = "Cancelar",
+  closeOnBackdrop = true,
 }: CreateHistoriaClinicaDialogProps) {
   const [values, setValues] = useState<FormState>(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -110,8 +137,9 @@ export function CreateHistoriaClinicaDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!values.fechaCreacion) {
-      setError("La fecha de creación es obligatoria.");
+    const validationError = validateHistoriaForm(values);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -139,6 +167,8 @@ export function CreateHistoriaClinicaDialog({
   };
 
   const nombre = getPacienteNombre(paciente);
+  const canSubmit = canSubmitHistoriaForm(values);
+  const maxFechaCreacion = todayLocalDateInput();
 
   return createPortal(
     <div
@@ -151,7 +181,9 @@ export function CreateHistoriaClinicaDialog({
         type="button"
         className="absolute inset-0 cursor-pointer bg-medical-text/55 backdrop-blur-sm"
         aria-label="Cerrar"
-        onClick={() => !loading && onClose()}
+        onClick={() => {
+          if (!loading && closeOnBackdrop) onClose();
+        }}
       />
       <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-medical-border bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-medical-border bg-medical-primary px-5 py-4">
@@ -184,6 +216,10 @@ export function CreateHistoriaClinicaDialog({
             </div>
           ) : (
             <div className="space-y-4 px-5 py-5 sm:px-6">
+              <p className="rounded-lg border border-medical-border/70 bg-medical-surface/50 px-3 py-2.5 text-xs leading-relaxed text-medical-mutedText">
+                La fecha de creación es obligatoria. Además, completá al menos uno de los campos
+                clínicos para registrar la historia.
+              </p>
               <div>
                 <Label htmlFor="historia-fecha" className="mb-1.5 block text-sm font-medium">
                   Fecha de creación <span className="text-medical-danger">*</span>
@@ -192,9 +228,12 @@ export function CreateHistoriaClinicaDialog({
                   id="historia-fecha"
                   type="date"
                   value={values.fechaCreacion}
-                  onChange={(e) => setValues((v) => ({ ...v, fechaCreacion: e.target.value }))}
+                  max={maxFechaCreacion}
+                  onChange={(e) => {
+                    setValues((v) => ({ ...v, fechaCreacion: e.target.value }));
+                    setError("");
+                  }}
                   className={inputClass}
-                  required
                 />
               </div>
               <div>
@@ -205,7 +244,10 @@ export function CreateHistoriaClinicaDialog({
                   id="historia-antecedentes"
                   rows={2}
                   value={values.antecedentes}
-                  onChange={(e) => setValues((v) => ({ ...v, antecedentes: e.target.value }))}
+                  onChange={(e) => {
+                    setValues((v) => ({ ...v, antecedentes: e.target.value }));
+                    setError("");
+                  }}
                   placeholder="Hipertensión, cirugías previas…"
                   className={textareaClass}
                 />
@@ -218,7 +260,10 @@ export function CreateHistoriaClinicaDialog({
                   id="historia-diagnostico"
                   rows={2}
                   value={values.diagnosticoInicial}
-                  onChange={(e) => setValues((v) => ({ ...v, diagnosticoInicial: e.target.value }))}
+                  onChange={(e) => {
+                    setValues((v) => ({ ...v, diagnosticoInicial: e.target.value }));
+                    setError("");
+                  }}
                   placeholder="Control domiciliario…"
                   className={textareaClass}
                 />
@@ -232,7 +277,10 @@ export function CreateHistoriaClinicaDialog({
                     id="historia-medicacion"
                     rows={2}
                     value={values.medicacion}
-                    onChange={(e) => setValues((v) => ({ ...v, medicacion: e.target.value }))}
+                    onChange={(e) => {
+                      setValues((v) => ({ ...v, medicacion: e.target.value }));
+                      setError("");
+                    }}
                     placeholder="Enalapril 10mg…"
                     className={textareaClass}
                   />
@@ -245,7 +293,10 @@ export function CreateHistoriaClinicaDialog({
                     id="historia-alergias"
                     rows={2}
                     value={values.alergias}
-                    onChange={(e) => setValues((v) => ({ ...v, alergias: e.target.value }))}
+                    onChange={(e) => {
+                      setValues((v) => ({ ...v, alergias: e.target.value }));
+                      setError("");
+                    }}
                     placeholder="Penicilina…"
                     className={textareaClass}
                   />
@@ -259,7 +310,10 @@ export function CreateHistoriaClinicaDialog({
                   id="historia-obs"
                   rows={2}
                   value={values.observaciones}
-                  onChange={(e) => setValues((v) => ({ ...v, observaciones: e.target.value }))}
+                  onChange={(e) => {
+                    setValues((v) => ({ ...v, observaciones: e.target.value }));
+                    setError("");
+                  }}
                   className={textareaClass}
                 />
               </div>
@@ -274,11 +328,12 @@ export function CreateHistoriaClinicaDialog({
           {!loading ? (
             <div className="flex flex-col-reverse gap-2 border-t border-medical-border bg-medical-surface/80 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
               <Button type="button" variant="outline" onClick={onClose} className="cursor-pointer">
-                Cancelar
+                {cancelLabel}
               </Button>
               <Button
                 type="submit"
-                className="bg-medical-primary cursor-pointer text-white hover:bg-medical-primaryDark"
+                disabled={!canSubmit}
+                className="bg-medical-primary cursor-pointer text-white hover:bg-medical-primaryDark disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Guardar historia
               </Button>

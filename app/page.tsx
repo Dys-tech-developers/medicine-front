@@ -1,7 +1,5 @@
-// src/app/page.tsx
-
-import HomeClient from "./HomeClient";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <HomeClient />;
+  redirect("/login");
 }

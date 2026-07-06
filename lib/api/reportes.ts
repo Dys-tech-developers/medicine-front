@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
+import { fetchAllPaginatedItems } from "@/lib/api/list-pagination";
 import {
   formatVisitaFilterDesdeParam,
   formatVisitaFilterHastaParam,
@@ -205,6 +206,19 @@ export async function getReporteVisitasWithApi(
     meta: normalizeMeta(data.meta as Record<string, unknown> | undefined),
     resumen: normalizeResumen(data.resumen as Record<string, unknown> | undefined),
   };
+}
+
+/** Listado completo de liquidación para exportación (respeta filtros del reporte). */
+export async function listReporteVisitasAllWithApi(
+  token: string,
+  options: ReportesQueryOptions = {}
+): Promise<ReporteVisitaItemDto[]> {
+  return fetchAllPaginatedItems((page, pageSize) =>
+    getReporteVisitasWithApi(token, { ...options, page, pageSize }).then((data) => ({
+      items: data.items,
+      total: data.total,
+    }))
+  );
 }
 
 export async function bulkUpdateReporteVisitasFinanzasWithApi(

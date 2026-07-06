@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import { createEvolucionClinicaWithApi } from "@/lib/api/historias-clinicas";
 import type { HistoriaClinicaEvolucionDto } from "@/lib/api/types";
+import { nowDatetimeLocalValue } from "@/lib/date-input";
 import {
   DEFAULT_MIN_LOADING_MS,
   delayRemaining,
@@ -20,17 +21,6 @@ const inputClass =
 const textareaClass =
   "w-full rounded-xl border border-medical-border bg-medical-surface/80 px-3.5 py-2.5 text-sm text-medical-text outline-none transition placeholder:text-medical-mutedText/60 focus:border-medical-primary focus:bg-medical-card focus:ring-4 focus:ring-medical-primary/12 disabled:cursor-not-allowed disabled:opacity-60";
 
-function nowDatetimeLocalValue(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function datetimeLocalToIso(value: string): string {
-  if (!value.trim()) return new Date().toISOString();
-  return new Date(value).toISOString();
-}
-
 type FormState = {
   fecha: string;
   observaciones: string;
@@ -39,10 +29,36 @@ type FormState = {
 
 function emptyForm(): FormState {
   return {
-    fecha: nowDatetimeLocalValue(),
+    fecha: "",
     observaciones: "",
     medicacion: "",
   };
+}
+
+function hasEvolucionContent(values: FormState): boolean {
+  return values.observaciones.trim().length > 0 || values.medicacion.trim().length > 0;
+}
+
+function validateEvolucionForm(values: FormState): string | null {
+  if (!values.fecha.trim()) return "La fecha y hora son obligatorias.";
+  const maxFecha = nowDatetimeLocalValue();
+  if (values.fecha > maxFecha) {
+    return "La fecha y hora no pueden ser posteriores al momento actual.";
+  }
+  if (!hasEvolucionContent(values)) {
+    return "Completá al menos observaciones o medicación.";
+  }
+  return null;
+}
+
+function canSubmitEvolucion(values: FormState): boolean {
+  if (!values.fecha.trim()) return false;
+  if (values.fecha > nowDatetimeLocalValue()) return false;
+  return hasEvolucionContent(values);
+}
+
+function datetimeLocalToIso(value: string): string {
+  return new Date(value).toISOString();
 }
 
 type CreateEvolucionClinicaDialogProps = {
@@ -86,16 +102,18 @@ export function CreateEvolucionClinicaDialog({
     e.preventDefault();
     if (!accessToken || historiaClinicaId == null) return;
 
-    const observaciones = values.observaciones.trim();
-    const medicacion = values.medicacion.trim();
-    if (!observaciones && !medicacion) {
-      setError("Completá al menos observaciones o medicación.");
+    const validationError = validateEvolucionForm(values);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
+    const observaciones = values.observaciones.trim();
+    const medicacion = values.medicacion.trim();
+
     setLoading(true);
     setError("");
-    const started = Date.now();
+    const startedAt = Date.now();
 
     try {
       const evolucion = await createEvolucionClinicaWithApi(accessToken, {
@@ -104,7 +122,7 @@ export function CreateEvolucionClinicaDialog({
         ...(observaciones ? { observaciones } : {}),
         ...(medicacion ? { medicacion } : {}),
       });
-      await delayRemaining(started, DEFAULT_MIN_LOADING_MS);
+      await delayRemaining(DEFAULT_MIN_LOADING_MS, startedAt);
       onSuccess(evolucion);
       onClose();
     } catch (err) {
@@ -119,6 +137,9 @@ export function CreateEvolucionClinicaDialog({
   }
 
   if (!open || historiaClinicaId == null || typeof document === "undefined") return null;
+
+  const maxFecha = nowDatetimeLocalValue();
+  const canSubmit = canSubmitEvolucion(values);
 
   return createPortal(
     <div
@@ -160,6 +181,10 @@ export function CreateEvolucionClinicaDialog({
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+          <p className="rounded-lg border border-medical-border/70 bg-medical-surface/50 px-3 py-2.5 text-xs leading-relaxed text-medical-mutedText">
+            Indicá la fecha y hora de la evolución y completá al menos observaciones o medicación.
+          </p>
+
           {error ? (
             <p className="rounded-lg border border-medical-danger/30 bg-medical-danger/10 px-4 py-3 text-sm text-medical-danger">
               {error}
@@ -167,15 +192,20 @@ export function CreateEvolucionClinicaDialog({
           ) : null}
 
           <div className="space-y-1.5">
-            <Label htmlFor="evolucion-fecha">Fecha y hora</Label>
+            <Label htmlFor="evolucion-fecha">
+              Fecha y hora <span className="text-medical-danger">*</span>
+            </Label>
             <input
               id="evolucion-fecha"
               type="datetime-local"
               className={inputClass}
               value={values.fecha}
-              onChange={(e) => setValues((v) => ({ ...v, fecha: e.target.value }))}
+              max={maxFecha}
+              onChange={(e) => {
+                setValues((v) => ({ ...v, fecha: e.target.value }));
+                setError("");
+              }}
               disabled={loading}
-              required
             />
           </div>
 
@@ -187,23 +217,26 @@ export function CreateEvolucionClinicaDialog({
               className={textareaClass}
               placeholder="Evolución del cuadro, signos vitales, indicaciones…"
               value={values.observaciones}
-              onChange={(e) => setValues((v) => ({ ...v, observaciones: e.target.value }))}
+              onChange={(e) => {
+                setValues((v) => ({ ...v, observaciones: e.target.value }));
+                setError("");
+              }}
               disabled={loading}
             />
-            <p className="text-xs text-medical-mutedText">
-              Al menos observaciones o medicación deben completarse.
-            </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="evolucion-medicacion">Medicación (opcional)</Label>
+            <Label htmlFor="evolucion-medicacion">Medicación</Label>
             <textarea
               id="evolucion-medicacion"
               rows={2}
               className={textareaClass}
               placeholder="Cambios o continuidad del tratamiento"
               value={values.medicacion}
-              onChange={(e) => setValues((v) => ({ ...v, medicacion: e.target.value }))}
+              onChange={(e) => {
+                setValues((v) => ({ ...v, medicacion: e.target.value }));
+                setError("");
+              }}
               disabled={loading}
             />
           </div>
@@ -219,7 +252,11 @@ export function CreateEvolucionClinicaDialog({
           >
             Cancelar
           </Button>
-          <Button type="submit" className="flex-1 cursor-pointer" disabled={loading}>
+          <Button
+            type="submit"
+            className="flex-1 cursor-pointer bg-medical-primary text-white hover:bg-medical-primaryDark disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={loading || !canSubmit}
+          >
             {loading ? (
               <>
                 <Loader2 className="size-4 animate-spin" />

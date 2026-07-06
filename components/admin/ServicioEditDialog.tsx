@@ -27,6 +27,9 @@ import {
 import {
   formatTarifaContexto,
   formatTarifaValor,
+  servicioModoVisitaFromFlags,
+  servicioModoVisitaToFlags,
+  type ServicioModoVisitaFormValue,
 } from "@/lib/servicios-display";
 import {
   MODALIDAD_COBRO_LABELS,
@@ -35,8 +38,10 @@ import {
   TIPO_JORNADA_LABELS,
   TIPOS_DIA,
   TIPOS_JORNADA,
+  normalizeTipoDia,
 } from "@/lib/servicios-tarifas-labels";
 import { Button } from "@/components/ui/button";
+import { ServicioModoVisitaSelector } from "@/components/admin/ServicioModoVisitaSelector";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import {
@@ -73,7 +78,7 @@ function tarifaToForm(tarifa: ServicioTarifaDto): TarifaFormState {
   return {
     modalidadCobro: tarifa.modalidadCobro,
     tipoJornada: tarifa.tipoJornada,
-    tipoDia: tarifa.tipoDia,
+    tipoDia: normalizeTipoDia(tarifa.tipoDia),
     valor: String(tarifa.valor),
   };
 }
@@ -124,6 +129,7 @@ export function ServicioEditDialog({
   const [draft, setDraft] = useState<ServicioConTarifasDto | null>(null);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [modoVisita, setModoVisita] = useState<ServicioModoVisitaFormValue>("registro_unico");
   const [editingTarifaId, setEditingTarifaId] = useState<number | null>(null);
   const [addingTarifa, setAddingTarifa] = useState(false);
   const [tarifaForm, setTarifaForm] = useState<TarifaFormState | null>(null);
@@ -136,6 +142,7 @@ export function ServicioEditDialog({
     setDraft(servicio);
     setNombre(servicio.nombre);
     setDescripcion(servicio.descripcion ?? "");
+    setModoVisita(servicioModoVisitaFromFlags(servicio));
     setError("");
     if (focusAddTarifa) {
       setAddingTarifa(true);
@@ -192,15 +199,19 @@ export function ServicioEditDialog({
     setError("");
     const startedAt = Date.now();
     try {
+      const { controlHorario, modoRelevo } = servicioModoVisitaToFlags(modoVisita);
       await updateServicioWithApi(accessToken, servicio.id, {
         nombre: trimmed,
         descripcion: desc || null,
+        controlHorario,
+        modoRelevo,
       });
       const refreshed = await refreshServicioWithApi(accessToken, servicio.id);
       await delayRemaining(DEFAULT_MIN_LOADING_MS, startedAt);
       setDraft(refreshed);
       setNombre(refreshed.nombre);
       setDescripcion(refreshed.descripcion ?? "");
+      setModoVisita(servicioModoVisitaFromFlags(refreshed));
       onUpdated(refreshed);
       onNotify("Servicio actualizado", "success", refreshed.nombre);
     } catch (err) {
@@ -380,6 +391,12 @@ export function ServicioEditDialog({
                 placeholder="Opcional"
               />
             </div>
+            <ServicioModoVisitaSelector
+              name="edit-servicio-modo-visita"
+              value={modoVisita}
+              onChange={setModoVisita}
+              disabled={busy}
+            />
             <Button
               type="submit"
               disabled={busy}

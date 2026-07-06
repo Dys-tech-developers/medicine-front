@@ -1,5 +1,5 @@
 /** Fallback si no hay NEXT_PUBLIC_API_URL en .env.local */
-const DEFAULT_API_URL = "http://localhost:3001";
+const DEFAULT_API_URL = "https://9a28-181-230-197-220.ngrok-free.app";
 
 export function getApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL?.trim();

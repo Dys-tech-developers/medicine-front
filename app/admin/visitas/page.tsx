@@ -4,10 +4,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  FileSpreadsheet,
   Search,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { VisitasDirectoryFilters } from "@/components/admin/VisitasDirectoryFilters";
 import { VisitasDirectoryTable } from "@/components/admin/VisitasDirectoryTable";
+import { ToastStack } from "@/components/ui/toast-stack";
+import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,15 +31,44 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { VisitaDetailDto } from "@/lib/api/types";
+import { ApiError } from "@/lib/api/client";
+import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import { loadAuthSession, type AuthSession } from "@/lib/auth-session";
+import { useVisitasDirectoryFilterOptions } from "@/lib/hooks/use-visitas-directory-filter-options";
 import { useVisitasList } from "@/lib/hooks/use-visitas-list";
+import {
+  DEFAULT_VISITAS_DIRECTORY_FILTERS,
+  hasActiveVisitasDirectoryFilters,
+  visitasDirectoryFiltersToApi,
+  type VisitasDirectoryFiltersState,
+} from "@/lib/visitas-directory-filters";
+import { invalidateAdminListCache } from "@/lib/cache/admin-list-cache";
 import { matchesVisitaSearch } from "@/lib/visitas-display";
+import {
+  exportVisitasWithFilters,
+  visitasExportHasActiveFilters,
+} from "@/lib/visitas-export";
 
 export default function AdminVisitasPage() {
+  const { toasts, showToast, dismiss } = useToast(4000);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [searchQuery, setSearchQuery] = useState("");
+  const [directoryFilters, setDirectoryFilters] = useState<VisitasDirectoryFiltersState>(
+    DEFAULT_VISITAS_DIRECTORY_FILTERS
+  );
+  const [appliedDirectoryFilters, setAppliedDirectoryFilters] =
+    useState<VisitasDirectoryFiltersState>(DEFAULT_VISITAS_DIRECTORY_FILTERS);
+  const [exportingList, setExportingList] = useState(false);
+
+  const apiFilters = useMemo(
+    () => visitasDirectoryFiltersToApi(appliedDirectoryFilters),
+    [appliedDirectoryFilters]
+  );
+
+  const { prestadores, pacientes, loadingOptions, optionsError } =
+    useVisitasDirectoryFilterOptions(session?.accessToken);
 
   useEffect(() => {
     const parsed = loadAuthSession();
@@ -51,48 +84,140 @@ export default function AdminVisitasPage() {
     enabled: Boolean(session),
     page,
     pageSize,
+    ...apiFilters,
   });
+
+  const handleApplyDirectoryFilters = useCallback((next?: VisitasDirectoryFiltersState) => {
+    const applied = next ?? directoryFilters;
+    setDirectoryFilters(applied);
+    setAppliedDirectoryFilters(applied);
+    setPage(1);
+    invalidateAdminListCache("visitas");
+    refresh();
+  }, [directoryFilters, refresh]);
 
   const handleVisitaUpdated = (updated: VisitaDetailDto) => {
     setListData({
       items: items.map((row) =>
         row.id === updated.id
-          ? { ...row, finanzas: updated.finanzas ?? row.finanzas }
+          ? { ...row, ...updated, finanzas: updated.finanzas ?? row.finanzas }
           : row
       ),
       total,
     });
   };
 
+  const handleVisitaDeleted = (visitaId: number) => {
+    setListData({
+      items: items.filter((row) => row.id !== visitaId),
+      total: Math.max(0, total - 1),
+    });
+    invalidateAdminListCache("visitas");
+  };
+
+  const handleVisitaCanceled = (updated: VisitaDetailDto) => {
+    setListData({
+      items: items.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)),
+      total,
+    });
+    invalidateAdminListCache("visitas");
+  };
+
+  const esAdmin = session?.roles.includes("ADMIN") ?? false;
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
 
-  const filteredItems = useMemo(
-    () => items.filter((row) => matchesVisitaSearch(row, searchQuery)),
-    [items, searchQuery]
-  );
+  const filteredItems = useMemo(() => {
+    let rows = items;
+    if (apiFilters.pacienteServicioId != null) {
+      rows = rows.filter((row) => row.pacienteServicioId === apiFilters.pacienteServicioId);
+    } else if (apiFilters.pacienteId != null) {
+      rows = rows.filter(
+        (row) => row.pacienteServicio?.paciente?.id === apiFilters.pacienteId
+      );
+    }
+    return rows.filter((row) => matchesVisitaSearch(row, searchQuery));
+  }, [items, searchQuery, apiFilters.pacienteId, apiFilters.pacienteServicioId]);
 
-  const isFiltering = searchQuery.trim().length > 0;
+  const hasBackendFilters = hasActiveVisitasDirectoryFilters(appliedDirectoryFilters);
+  const isClientSearch = searchQuery.trim().length > 0;
+  const hasExportFilters = visitasExportHasActiveFilters({
+    searchQuery,
+    directoryFilters: appliedDirectoryFilters,
+  });
 
   const paginationHint = useMemo(() => {
     if (loading) return "Cargando…";
-    if (isFiltering) {
+    if (isClientSearch) {
       return filteredItems.length === 0
         ? "Sin coincidencias en esta página."
         : `${filteredItems.length} coincidencia${filteredItems.length === 1 ? "" : "s"} en esta página`;
     }
-    if (total === 0) return "Sin registros.";
+    if (total === 0) {
+      return hasBackendFilters ? "Sin visitas con estos filtros." : "Sin registros.";
+    }
     return `Mostrando ${rangeStart}–${rangeEnd} de ${total}`;
-  }, [loading, isFiltering, filteredItems.length, total, rangeStart, rangeEnd]);
+  }, [
+    loading,
+    isClientSearch,
+    hasBackendFilters,
+    filteredItems.length,
+    total,
+    rangeStart,
+    rangeEnd,
+  ]);
 
   const handlePageSizeChange = (next: string) => {
     setPageSize(Number(next));
     setPage(1);
   };
 
+  const handleExportVisitas = useCallback(async () => {
+    const token = session?.accessToken;
+    if (!token) {
+      showToast("Sesión no válida. Volvé a iniciar sesión.", "error");
+      return;
+    }
+
+    const filters = {
+      searchQuery,
+      directoryFilters: appliedDirectoryFilters,
+    };
+
+    setExportingList(true);
+    try {
+      const count = await exportVisitasWithFilters(token, filters);
+      if (count === 0) {
+        showToast(
+          "Sin visitas para exportar",
+          "error",
+          hasExportFilters
+            ? "Ninguna visita coincide con los filtros activos."
+            : "No hay visitas registradas."
+        );
+        return;
+      }
+      showToast(
+        "Listado exportado",
+        "success",
+        `${count} visita${count === 1 ? "" : "s"}${hasExportFilters ? " (filtros aplicados)" : ""}`
+      );
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? getApiErrorMessages(err).join(" ")
+          : "No se pudo exportar el listado.";
+      showToast(msg, "error");
+    } finally {
+      setExportingList(false);
+    }
+  }, [session?.accessToken, searchQuery, appliedDirectoryFilters, hasExportFilters, showToast]);
+
   return (
     <div className="relative z-0 w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
       <section className="min-w-0" aria-labelledby="visitas-directory-heading">
         <Card className="overflow-hidden border-medical-border py-0 shadow-md ring-medical-border/50">
           <CardHeader className="gap-0 border-b border-medical-border bg-medical-primary px-5 py-5 sm:px-7 sm:py-6">
@@ -108,15 +233,28 @@ export default function AdminVisitasPage() {
                   Visitas registradas
                 </CardTitle>
                 <CardDescription className="max-w-2xl text-sm leading-relaxed text-white/85">
-                  Historial de visitas médicas: paciente, prestador, fecha, duración y
-                  prestación. Buscá por nombre, documento, prestador u observaciones en la
-                  página actual.
+                  Historial de visitas. Usá la sección <strong className="font-semibold text-white">Filtros</strong> debajo del encabezado (fondo blanco).
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
 
-          <div className="border-b border-medical-border/80 bg-medical-surface/50 px-5 py-4 sm:px-7 sm:py-5">
+          <VisitasDirectoryFilters
+            filters={directoryFilters}
+            onChange={setDirectoryFilters}
+            prestadores={prestadores}
+            pacientes={pacientes}
+            accessToken={session?.accessToken ?? null}
+            loadingOptions={loadingOptions}
+            loadingList={loading}
+            optionsError={optionsError}
+            onApply={handleApplyDirectoryFilters}
+          />
+
+          <div className="border-b border-medical-border/80 bg-medical-surface/40 px-5 py-4 sm:px-7 sm:py-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-medical-mutedText">
+              Búsqueda en la página
+            </p>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
               <div className="relative min-w-0 flex-1 lg:max-w-lg">
                 <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-medical-mutedText" />
@@ -129,6 +267,28 @@ export default function AdminVisitasPage() {
                   className="h-10 border-medical-border/80 bg-background pl-9 shadow-sm"
                 />
               </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 cursor-pointer border-medical-border/80 bg-background px-3 text-sm shadow-sm"
+                disabled={loading || exportingList}
+                onClick={() => void handleExportVisitas()}
+                title={
+                  hasExportFilters
+                    ? "Exportar visitas con los filtros activos"
+                    : "Exportar listado completo"
+                }
+              >
+                {exportingList ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-medical-primary/30 border-t-medical-primary" />
+                ) : (
+                  <FileSpreadsheet className="size-4 text-medical-primary" />
+                )}
+                <span className="hidden sm:inline">Exportar Excel</span>
+                <span className="sm:hidden">Exportar</span>
+              </Button>
 
               <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                 <div className="flex items-center gap-3">
@@ -177,12 +337,16 @@ export default function AdminVisitasPage() {
               loading={loading}
               error={error}
               accessToken={session?.accessToken ?? null}
+              esAdmin={esAdmin}
               onRetry={refresh}
               onVisitaUpdated={handleVisitaUpdated}
+              onVisitaDeleted={handleVisitaDeleted}
+              onVisitaCanceled={handleVisitaCanceled}
+              onNotify={(message, kind, description) => showToast(message, kind, description)}
             />
           </CardContent>
 
-          {!loading && !error && items.length > 0 && !isFiltering ? (
+          {!loading && !error && items.length > 0 && !isClientSearch ? (
             <CardFooter className="flex-col gap-4 border-t border-medical-border/80 bg-medical-surface/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-5">
               <p className="text-sm text-medical-mutedText">{paginationHint}</p>
               <div className="flex items-center gap-3">

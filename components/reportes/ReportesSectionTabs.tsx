@@ -6,7 +6,7 @@ import { BarChart3, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/admin/reportes/finanzas", label: "Finanzas", icon: DollarSign },
+  { href: "/admin/reportes/finanzas", label: "Por visita", icon: DollarSign },
   { href: "/admin/reportes/finanzas/resumen", label: "Resumen", icon: BarChart3 },
 ] as const;
 
@@ -35,7 +35,7 @@ export function ReportesSectionTabs({ variant = "header", className }: Props) {
         isHeader ? "border border-white/20 bg-white/10" : "border border-medical-border bg-white",
         className
       )}
-      aria-label="Secciones de reportes"
+      aria-label="Secciones de liquidación"
     >
       {LINKS.map(({ href, label, icon: Icon }) => {
         const active = isLinkActive(pathname, href);

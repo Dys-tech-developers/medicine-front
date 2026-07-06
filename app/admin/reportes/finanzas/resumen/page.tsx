@@ -172,7 +172,7 @@ export default function ReportesResumenPage() {
                   Resumen agregado
                 </CardTitle>
                 <CardDescription className="text-xs text-white/85 sm:text-sm">
-                  Por prestador o servicio · solo lectura
+                  Totales del período por prestador o servicio · solo lectura
                 </CardDescription>
               </div>
             </div>

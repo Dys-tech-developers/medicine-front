@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
-import { Camera, Loader2, QrCode, Search, X } from "lucide-react";
+import { Camera, ChevronDown, Loader2, QrCode, Search, X } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { getPacienteByCodigoQrWithApi } from "@/lib/api/pacientes";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
@@ -29,11 +29,14 @@ const QrCameraScannerModal = dynamic(
 type PacienteQrLookupPanelProps = {
   accessToken: string | null;
   onPatientFound?: (paciente: PacienteDto) => void;
+  /** Barra compacta colapsable (por defecto cerrada). */
+  compact?: boolean;
 };
 
 export function PacienteQrLookupPanel({
   accessToken,
   onPatientFound,
+  compact = false,
 }: PacienteQrLookupPanelProps) {
   const [qrInput, setQrInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -88,6 +91,131 @@ export function PacienteQrLookupPanel({
     setQrInput("");
   };
 
+  const qrFormAndResult = (
+    <>
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-2 sm:flex-row sm:items-center"
+      >
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <QrCode className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-medical-mutedText" />
+          <Input
+            type="text"
+            value={qrInput}
+            onChange={(e) => setQrInput(e.target.value.toUpperCase())}
+            placeholder="PAC-000001"
+            disabled={loading || !accessToken}
+            className="h-9 border-medical-border/80 bg-background pl-8 font-mono text-sm uppercase shadow-sm"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            type="submit"
+            size="sm"
+            disabled={loading || !accessToken || !qrInput.trim()}
+            className="h-9 cursor-pointer bg-medical-primary hover:bg-medical-primaryDark"
+          >
+            {loading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Search className="size-3.5" />
+            )}
+            Buscar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 cursor-pointer border-medical-border/80"
+            disabled={loading || !accessToken}
+            onClick={() => setCameraOpen(true)}
+          >
+            <Camera className="size-3.5" />
+            Escanear
+          </Button>
+          {result ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 cursor-pointer border-medical-border/80"
+              onClick={clearResult}
+            >
+              <X className="size-3.5" />
+              Limpiar
+            </Button>
+          ) : null}
+        </div>
+      </form>
+
+      {error ? (
+        <p className="mt-2 rounded-md border border-medical-danger/30 bg-medical-danger/10 px-2.5 py-1.5 text-xs text-medical-danger">
+          {error}
+        </p>
+      ) : null}
+
+      {result ? (
+        <div className="mt-2 overflow-hidden rounded-lg border border-medical-primary/25 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:gap-4">
+            <div className="flex shrink-0 flex-col items-center gap-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={result.qrDataUrl}
+                alt={`QR ${result.codigoQr}`}
+                className="size-20 rounded-md border border-medical-border bg-white p-0.5"
+              />
+              <span className="font-mono text-[10px] font-semibold text-medical-primary">
+                {result.codigoQr}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex items-center gap-2">
+                <div className="flex size-9 items-center justify-center rounded-lg bg-medical-secondary text-xs font-bold text-medical-primary">
+                  {getPacienteInitials(result)}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-medical-text">
+                    {getPacienteNombre(result)}
+                  </p>
+                  <p className="truncate text-xs text-medical-mutedText">
+                    DNI {result.numeroDocumento}
+                    {result.numeroAfiliado ? ` · Af. ${result.numeroAfiliado}` : ""}
+                  </p>
+                </div>
+              </div>
+              <dl className="grid grid-cols-2 gap-1.5 text-xs sm:grid-cols-4">
+                <div className="rounded-md border border-medical-border/80 bg-medical-surface/40 px-2 py-1">
+                  <dt className="text-[9px] uppercase text-medical-mutedText">Edad</dt>
+                  <dd className="font-medium text-medical-text">
+                    {getPacienteEdad(result.fechaNacimiento)} a.
+                  </dd>
+                </div>
+                <div className="rounded-md border border-medical-border/80 bg-medical-surface/40 px-2 py-1">
+                  <dt className="text-[9px] uppercase text-medical-mutedText">Sexo</dt>
+                  <dd className="font-medium text-medical-text">
+                    {formatPacienteSexo(result.sexo)}
+                  </dd>
+                </div>
+                <div className="rounded-md border border-medical-border/80 bg-medical-surface/40 px-2 py-1">
+                  <dt className="text-[9px] uppercase text-medical-mutedText">Tel.</dt>
+                  <dd className="truncate font-medium text-medical-text">{result.telefono}</dd>
+                </div>
+                <div className="rounded-md border border-medical-border/80 bg-medical-surface/40 px-2 py-1">
+                  <dt className="text-[9px] uppercase text-medical-mutedText">Nac.</dt>
+                  <dd className="font-medium text-medical-text">
+                    {formatPacienteFechaNacimiento(result.fechaNacimiento)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+
   return (
     <>
       {cameraOpen ? (
@@ -100,135 +228,30 @@ export function PacienteQrLookupPanel({
         />
       ) : null}
 
-      <div className="border-b border-medical-border/80 bg-medical-secondary/25 px-5 py-4 sm:px-7 sm:py-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-medical-primaryDark">
-          Búsqueda por código QR
-        </p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1">
-            <QrCode className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-medical-mutedText" />
-            <Input
-              type="text"
-              value={qrInput}
-              onChange={(e) => setQrInput(e.target.value.toUpperCase())}
-              placeholder="PAC-000001"
-              disabled={loading || !accessToken}
-              className="h-10 border-medical-border/80 bg-background pl-9 font-mono text-sm uppercase shadow-sm"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="submit"
-              disabled={loading || !accessToken || !qrInput.trim()}
-              className="bg-medical-primary cursor-pointer hover:bg-medical-primaryDark"
-            >
-              {loading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Search className="size-4" />
-              )}
-              Buscar
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="border-medical-border/80 cursor-pointer"
-              disabled={loading || !accessToken}
-              onClick={() => setCameraOpen(true)}
-            >
-              <Camera className="size-4" />
-              Escanear
-            </Button>
-            {result ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="border-medical-border/80 cursor-pointer"
-                onClick={clearResult}
-              >
-                <X className="size-4" />
-                Limpiar
-              </Button>
-            ) : null}
-          </div>
-        </form>
-
-        {error ? (
-          <p className="mt-3 rounded-lg border border-medical-danger/30 bg-medical-danger/10 px-3 py-2 text-sm text-medical-danger">
-            {error}
-          </p>
-        ) : null}
-
-        {result ? (
-          <div className="mt-4 overflow-hidden rounded-xl border border-medical-primary/30 bg-white shadow-sm">
-            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:gap-6">
-              <div className="flex shrink-0 flex-col items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={result.qrDataUrl}
-                  alt={`QR ${result.codigoQr}`}
-                  className="size-28 rounded-lg border border-medical-border bg-white p-1"
-                />
-                <span className="font-mono text-xs font-semibold text-medical-primary">
-                  {result.codigoQr}
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex size-11 items-center justify-center rounded-xl bg-medical-secondary text-sm font-bold text-medical-primary">
-                    {getPacienteInitials(result)}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-medical-text">{getPacienteNombre(result)}</p>
-                    <p className="text-sm text-medical-mutedText">
-                      DNI {result.numeroDocumento} · Afiliado {result.numeroAfiliado}
-                    </p>
-                  </div>
-                </div>
-                <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                  <div className="rounded-lg border border-medical-border bg-medical-surface/50 px-3 py-2">
-                    <dt className="text-[10px] font-medium uppercase tracking-wide text-medical-mutedText">
-                      Edad
-                    </dt>
-                    <dd className="font-medium text-medical-text">
-                      {getPacienteEdad(result.fechaNacimiento)} años
-                    </dd>
-                  </div>
-                  <div className="rounded-lg border border-medical-border bg-medical-surface/50 px-3 py-2">
-                    <dt className="text-[10px] font-medium uppercase tracking-wide text-medical-mutedText">
-                      Sexo
-                    </dt>
-                    <dd className="font-medium text-medical-text">
-                      {formatPacienteSexo(result.sexo)}
-                    </dd>
-                  </div>
-                  <div className="rounded-lg border border-medical-border bg-medical-surface/50 px-3 py-2">
-                    <dt className="text-[10px] font-medium uppercase tracking-wide text-medical-mutedText">
-                      Teléfono
-                    </dt>
-                    <dd className="font-medium text-medical-text">{result.telefono}</dd>
-                  </div>
-                  <div className="rounded-lg border border-medical-border bg-medical-surface/50 px-3 py-2">
-                    <dt className="text-[10px] font-medium uppercase tracking-wide text-medical-mutedText">
-                      Nacimiento
-                    </dt>
-                    <dd className="font-medium text-medical-text">
-                      {formatPacienteFechaNacimiento(result.fechaNacimiento)}
-                    </dd>
-                  </div>
-                  <div className="col-span-full rounded-lg border border-medical-border bg-medical-surface/50 px-3 py-2">
-                    <dt className="text-[10px] font-medium uppercase tracking-wide text-medical-mutedText">
-                      Dirección
-                    </dt>
-                    <dd className="font-medium text-medical-text">{result.direccion}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-          </div>
-        ) : null}
+      <div
+        className={
+          compact
+            ? "border-t border-medical-border/60 pt-2"
+            : "border-b border-medical-border/80 bg-medical-secondary/25 px-5 py-4 sm:px-7 sm:py-5"
+        }
+      >
+        {compact ? (
+          <details className="group" open={Boolean(result || error)}>
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-medical-primary hover:text-medical-primaryDark [&::-webkit-details-marker]:hidden">
+              <QrCode className="size-3.5 shrink-0" aria-hidden />
+              Buscar por código QR
+              <ChevronDown className="size-3.5 shrink-0 transition group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="pt-2">{qrFormAndResult}</div>
+          </details>
+        ) : (
+          <>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-medical-primaryDark">
+              Búsqueda por código QR
+            </p>
+            {qrFormAndResult}
+          </>
+        )}
       </div>
     </>
   );

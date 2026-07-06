@@ -1,18 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ClipboardList,
   Eye,
   FilePlus,
+  Layers,
   Loader2,
-  MapPin,
-  Phone,
-  Plus,
+  MoreHorizontal,
+  Pencil,
   QrCode,
   RefreshCw,
   Search,
+  Trash2,
   User,
   UserPlus,
 } from "lucide-react";
@@ -20,23 +22,31 @@ import { AssignPacienteServicioDialog } from "@/components/admin/AssignPacienteS
 import { CreateHistoriaClinicaDialog } from "@/components/admin/CreateHistoriaClinicaDialog";
 import { HistoriaClinicaViewDialog } from "@/components/admin/HistoriaClinicaViewDialog";
 import { PacienteDeleteConfirmDialog } from "@/components/admin/PacienteDeleteConfirmDialog";
-import { PacienteDetailDialog } from "@/components/admin/PacienteDetailDialog";
 import { PacienteEditDialog } from "@/components/admin/PacienteEditDialog";
 import { PacienteQrDialog } from "@/components/admin/PacienteQrDialog";
 import { ApiError } from "@/lib/api/client";
 import {
-  getPacienteServicioDisponibilidadWithApi,
-  listPacienteServiciosWithApi,
-} from "@/lib/api/paciente-servicios";
-import {
   deletePacienteWithApi,
   getPacienteByCodigoQrWithApi,
+  getPacienteByIdWithApi,
 } from "@/lib/api/pacientes";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
-import type { PacienteDto, PacienteListItemDto, PacienteServicioDto } from "@/lib/api/types";
+import type {
+  PacienteDto,
+  PacienteListItemDto,
+  PacienteServicioDto,
+} from "@/lib/api/types";
 import { PacientesDirectoryTableSkeleton } from "@/components/skeletons/dashboard-skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -46,18 +56,31 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  formatPacienteFechaNacimiento,
+  formatPacienteLocalidad,
   formatPacienteObraSocial,
-  formatPacienteSexo,
   getPacienteEdad,
   getPacienteInitials,
   getPacienteNombre,
 } from "@/lib/pacientes-display";
-import { usePacientesHistoriaStatus } from "@/lib/hooks/use-pacientes-historia-status";
+import { usePacientesHistoriaStatus, type PacienteHistoriaStatus } from "@/lib/hooks/use-pacientes-historia-status";
 import { cn } from "@/lib/utils";
 
-function TableScrollArea({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto">{children}</div>;
+function PacientesTable({ children }: { children: ReactNode }) {
+  return <Table className="min-w-[760px]">{children}</Table>;
+}
+
+type ServiciosResumen = { loading: boolean; nombres: string[]; total: number };
+
+async function fetchServiciosResumenPaciente(
+  accessToken: string,
+  pacienteId: number
+): Promise<{ nombres: string[]; total: number }> {
+  const detail = await getPacienteByIdWithApi(accessToken, pacienteId);
+  const activos = (detail.servicios ?? []).filter((s) => s.estado === "activa");
+  return {
+    nombres: activos.map((s) => s.servicioNombre),
+    total: activos.length,
+  };
 }
 
 export type PacientesDirectoryTableProps = {
@@ -74,22 +97,248 @@ export type PacientesDirectoryTableProps = {
   onPacienteUpdated?: (paciente: PacienteListItemDto) => void;
   onPacienteDeleted?: (paciente: PacienteListItemDto) => void;
   onServicioAssigned?: (asignacion: PacienteServicioDto) => void;
+  userRoles?: string[];
 };
 
 const thClass =
-  "px-4 py-3 text-xs font-bold uppercase tracking-wide text-medical-primaryDark first:pl-6 last:pr-5 sm:px-5";
-const tdClass =
-  "px-4 py-4 align-middle first:pl-6 last:pr-5 sm:px-5";
+  "h-11 px-4 text-xs font-medium text-muted-foreground first:pl-6 last:pr-6 sm:px-5";
+const tdClass = "px-4 py-3 align-middle first:pl-6 last:pr-6 sm:px-5";
+
+type PacienteRowHandlers = {
+  onAssignServicio: (paciente: PacienteListItemDto) => void;
+  onViewQr: (paciente: PacienteListItemDto) => void;
+  onViewHistoria: (paciente: PacienteListItemDto) => void;
+  onCreateHistoria: (paciente: PacienteListItemDto) => void;
+  onEdit: (paciente: PacienteListItemDto) => void;
+  onDelete?: (paciente: PacienteListItemDto) => void;
+  getHistoriaStatus: (id: number) => PacienteHistoriaStatus | undefined;
+  historiaLoading: boolean;
+};
+
+function PacienteRowActionsMenu({
+  paciente,
+  navigateToFicha,
+  onAssignServicio,
+  onViewQr,
+  onViewHistoria,
+  onCreateHistoria,
+  onEdit,
+  onDelete,
+  getHistoriaStatus,
+  historiaLoading,
+  runMenuAction,
+}: {
+  paciente: PacienteListItemDto;
+  navigateToFicha: (paciente: PacienteListItemDto) => void;
+  runMenuAction: (action: () => void) => void;
+} & PacienteRowHandlers) {
+  const nombre = getPacienteNombre(paciente);
+  const historiaStatus = getHistoriaStatus(paciente.id);
+  const conHistoria = historiaStatus === "yes";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="size-8 cursor-pointer p-0 text-medical-mutedText hover:bg-medical-secondary hover:text-medical-text"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="size-4" />
+          <span className="sr-only">Acciones de {nombre}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="z-120 w-56 border-medical-border bg-white p-1 shadow-lg"
+      >
+        <DropdownMenuLabel className="px-2 py-1.5 text-xs font-semibold text-medical-text">
+          {nombre}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="bg-medical-border" />
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+          onSelect={() => navigateToFicha(paciente)}
+        >
+          <Eye className="size-4 text-medical-primary" />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span>Ver datos del paciente</span>
+            <span className="text-[11px] font-normal text-medical-mutedText">
+              Perfil, servicios y contacto
+            </span>
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+          onSelect={() => runMenuAction(() => onAssignServicio(paciente))}
+        >
+          <Layers className="size-4 text-medical-primary" />
+          Asignar servicio
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+          onSelect={() => runMenuAction(() => onViewQr(paciente))}
+        >
+          <QrCode className="size-4 text-medical-primary" />
+          Ver credencial QR
+        </DropdownMenuItem>
+        {historiaLoading ? (
+          <DropdownMenuItem disabled className="gap-2 rounded-lg">
+            <Loader2 className="size-4 animate-spin" />
+            Cargando historia…
+          </DropdownMenuItem>
+        ) : conHistoria ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+            onSelect={() => runMenuAction(() => onViewHistoria(paciente))}
+          >
+            <ClipboardList className="size-4 text-medical-primary" />
+            Ver historia clínica
+          </DropdownMenuItem>
+        ) : historiaStatus === "error" ? (
+          <DropdownMenuItem disabled className="gap-2 rounded-lg text-medical-mutedText">
+            No se pudo verificar la historia
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+            onSelect={() => runMenuAction(() => onCreateHistoria(paciente))}
+          >
+            <FilePlus className="size-4 text-amber-600" />
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span>Crear historia clínica</span>
+              <span className="text-[11px] font-normal text-medical-mutedText">
+                Este paciente no tiene ficha médica registrada
+              </span>
+            </span>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+          onSelect={() => runMenuAction(() => onEdit(paciente))}
+        >
+          <Pencil className="size-4 text-medical-primary" />
+          Editar datos
+        </DropdownMenuItem>
+        {onDelete ? (
+          <>
+            <DropdownMenuSeparator className="bg-medical-border" />
+            <DropdownMenuItem
+              className="cursor-pointer gap-2 rounded-lg text-medical-danger focus:bg-medical-danger/10 focus:text-medical-danger"
+              onSelect={() =>
+                runMenuAction(() => {
+                  onDelete(paciente);
+                })
+              }
+            >
+              <Trash2 className="size-4" />
+              Eliminar paciente
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ServiciosCell({ summary }: { summary?: ServiciosResumen }) {
+  if (!summary || summary.loading) {
+    return (
+      <div className="space-y-1.5">
+        <div className="h-3.5 w-16 animate-pulse rounded bg-medical-border/50" />
+        <div className="h-3 w-28 animate-pulse rounded bg-medical-border/40" />
+      </div>
+    );
+  }
+
+  if (summary.total === 0) {
+    return <span className="text-xs text-medical-mutedText">Sin servicios</span>;
+  }
+
+  const nombres = summary.nombres.join(", ");
+
+  return (
+    <div className="min-w-0 space-y-0.5">
+      <p className="text-sm font-medium leading-snug text-medical-primaryDark">
+        {summary.total} activo{summary.total === 1 ? "" : "s"}
+      </p>
+      <p className="max-w-52 truncate text-xs text-muted-foreground" title={nombres}>
+        {nombres}
+      </p>
+    </div>
+  );
+}
+
+function HistoriaCell({
+  paciente,
+  loading,
+  status,
+  onViewHistoria,
+  onCreateHistoria,
+}: {
+  paciente: PacienteListItemDto;
+  loading: boolean;
+  status?: PacienteHistoriaStatus;
+  onViewHistoria: (paciente: PacienteListItemDto) => void;
+  onCreateHistoria: (paciente: PacienteListItemDto) => void;
+}) {
+  if (loading) {
+    return <div className="h-3.5 w-12 animate-pulse rounded bg-medical-border/50" />;
+  }
+
+  if (status === "error") {
+    return (
+      <span className="text-xs font-medium text-medical-mutedText" title="No se pudo verificar">
+        —
+      </span>
+    );
+  }
+
+  const conHistoria = status === "yes";
+  const label = conHistoria ? "HC" : "Sin HC";
+  const title = conHistoria
+    ? "Tiene historia clínica — clic para ver"
+    : "Sin historia clínica — clic para crear";
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (conHistoria) onViewHistoria(paciente);
+        else onCreateHistoria(paciente);
+      }}
+      className={cn(
+        "inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition hover:bg-medical-secondary/80",
+        conHistoria ? "text-medical-success" : "text-medical-mutedText"
+      )}
+      title={title}
+      aria-label={title}
+    >
+      <span
+        className={cn(
+          "size-2 shrink-0 rounded-full",
+          conHistoria ? "bg-medical-success" : "bg-medical-border"
+        )}
+        aria-hidden
+      />
+      {label}
+    </button>
+  );
+}
 
 function TableHeaderRow() {
   return (
     <TableHeader>
-      <TableRow className="bg-medical-secondary/90 hover:bg-medical-secondary/90">
+      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
         <TableHead className={thClass}>Paciente</TableHead>
-        <TableHead className={cn(thClass, "hidden md:table-cell")}>Documento</TableHead>
+        <TableHead className={cn(thClass, "hidden sm:table-cell")}>Servicios</TableHead>
         <TableHead className={cn(thClass, "hidden lg:table-cell")}>Contacto</TableHead>
-        <TableHead className={cn(thClass, "hidden sm:table-cell")}>Afiliación</TableHead>
-        <TableHead className={cn(thClass, "w-[148px] text-right")}>
+        <TableHead className={cn(thClass, "hidden md:table-cell")}>Afiliación</TableHead>
+        <TableHead className={cn(thClass, "hidden lg:table-cell")}>Historia</TableHead>
+        <TableHead className={cn(thClass, "w-14 text-right")}>
           <span className="sr-only">Acciones</span>
         </TableHead>
       </TableRow>
@@ -111,8 +360,10 @@ export function PacientesDirectoryTable({
   onPacienteUpdated,
   onPacienteDeleted,
   onServicioAssigned,
+  userRoles = [],
 }: PacientesDirectoryTableProps) {
-  const [detailTarget, setDetailTarget] = useState<PacienteListItemDto | null>(null);
+  const router = useRouter();
+  const blockNavigationRef = useRef(false);
   const [editTarget, setEditTarget] = useState<PacienteListItemDto | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PacienteListItemDto | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -130,88 +381,85 @@ export function PacientesDirectoryTable({
     useState<PacienteListItemDto | null>(null);
 
   const [serviciosSummary, setServiciosSummary] = useState<
-    Record<number, { loading: boolean; lines: string[]; total: number }>
+    Record<number, ServiciosResumen>
   >({});
 
   const pacienteIds = useMemo(() => items.map((p) => p.id), [items]);
-  const { hasHistoria, loading: historiaStatusLoading } = usePacientesHistoriaStatus(
+  const pacienteIdsKey = pacienteIds.join(",");
+  const { getHistoriaStatus, loading: historiaStatusLoading } = usePacientesHistoriaStatus(
     accessToken,
     pacienteIds,
     historiaStatusRefreshKey
   );
 
+  const navigateToFicha = useCallback(
+    (paciente: PacienteListItemDto, options?: { tab?: "historia" }) => {
+      const base = `/admin/pacientes/${paciente.id}`;
+      router.push(options?.tab ? `${base}?tab=${options.tab}` : base);
+    },
+    [router]
+  );
+
+  const openFichaFromRow = useCallback(
+    (paciente: PacienteListItemDto) => {
+      if (blockNavigationRef.current) {
+        blockNavigationRef.current = false;
+        return;
+      }
+      navigateToFicha(paciente);
+    },
+    [navigateToFicha]
+  );
+
+  const runMenuAction = useCallback((action: () => void) => {
+    blockNavigationRef.current = true;
+    action();
+  }, []);
+
   useEffect(() => {
-    if (!accessToken || items.length === 0) return;
+    if (!accessToken || pacienteIds.length === 0) {
+      setServiciosSummary({});
+      return;
+    }
+
     let cancelled = false;
 
-    const ensure = (id: number) => {
-      if (serviciosSummary[id]) return false;
-      return true;
-    };
-
-    const run = async () => {
-      const idsToFetch = items.map((p) => p.id).filter((id) => ensure(id));
-      if (idsToFetch.length === 0) return;
-
-      setServiciosSummary((prev) => {
-        const next = { ...prev };
-        for (const id of idsToFetch) {
-          next[id] = { loading: true, lines: [], total: 0 };
+    setServiciosSummary((prev) => {
+      const next: Record<number, ServiciosResumen> = {};
+      for (const id of pacienteIds) {
+        const cached = prev[id];
+        if (cached && !cached.loading) {
+          next[id] = cached;
+        } else {
+          next[id] = { loading: true, nombres: [], total: 0 };
         }
-        return next;
-      });
+      }
+      return next;
+    });
 
-      for (const id of idsToFetch) {
+    void Promise.all(
+      pacienteIds.map(async (id) => {
         try {
-          const data = await listPacienteServiciosWithApi(accessToken, {
-            page: 1,
-            pageSize: 20,
-            pacienteId: id,
-            estado: "activa",
-          });
-          const lines = await Promise.all(
-            (data.items ?? []).map(async (a) => {
-              const nombre = a.servicio?.nombre ?? `Servicio #${a.servicioId}`;
-              const isDisponibilidadAplicable =
-                a.modalidadCobro === "por_servicio" || a.modalidadCobro === "por_dia";
-              if (!isDisponibilidadAplicable) {
-                return `${nombre} · sin tope`;
-              }
-              try {
-                const dispRes = await getPacienteServicioDisponibilidadWithApi(accessToken, a.id);
-                const disp = dispRes.disponibilidad;
-                const usado = Number(disp.cantidadUtilizada ?? 0);
-                const permitido = Number(disp.cantidadPermitida ?? 0);
-                const texto =
-                  disp.utilizadoYPermitido?.trim() ||
-                  `${Number.isFinite(usado) ? usado : 0}/${Number.isFinite(permitido) ? permitido : 0}`;
-                return `${nombre} · ${texto}`;
-              } catch {
-                return `${nombre} · disp. n/d`;
-              }
-            })
-          );
+          const { nombres, total } = await fetchServiciosResumenPaciente(accessToken, id);
           if (cancelled) return;
           setServiciosSummary((prev) => ({
             ...prev,
-            [id]: { loading: false, lines, total: data.total ?? lines.length },
+            [id]: { loading: false, nombres, total },
           }));
         } catch {
           if (cancelled) return;
           setServiciosSummary((prev) => ({
             ...prev,
-            [id]: { loading: false, lines: [], total: 0 },
+            [id]: { loading: false, nombres: [], total: 0 },
           }));
         }
-      }
-    };
+      })
+    );
 
-    void run();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, items]);
+  }, [accessToken, pacienteIdsKey, pacienteIds]);
 
   const confirmDeletePaciente = useCallback(async () => {
     if (!deleteTarget || !accessToken) return;
@@ -221,7 +469,6 @@ export function PacientesDirectoryTable({
       await deletePacienteWithApi(accessToken, deleteTarget.id);
       const removed = deleteTarget;
       setDeleteTarget(null);
-      if (detailTarget?.id === removed.id) setDetailTarget(null);
       onPacienteDeleted?.(removed);
     } catch (err) {
       const msg =
@@ -232,7 +479,7 @@ export function PacientesDirectoryTable({
     } finally {
       setDeleteLoading(false);
     }
-  }, [accessToken, deleteTarget, detailTarget?.id, onPacienteDeleted]);
+  }, [accessToken, deleteTarget, onPacienteDeleted]);
 
   const closeQrDialog = useCallback(() => {
     setQrOpen(false);
@@ -271,12 +518,10 @@ export function PacientesDirectoryTable({
 
   if (loading) {
     return (
-      <TableScrollArea>
-        <Table className="min-w-[760px]">
-          <TableHeaderRow />
-          <PacientesDirectoryTableSkeleton rows={6} cellClassName={tdClass} />
-        </Table>
-      </TableScrollArea>
+      <PacientesTable>
+        <TableHeaderRow />
+        <PacientesDirectoryTableSkeleton rows={5} cellClassName={tdClass} />
+      </PacientesTable>
     );
   }
 
@@ -333,36 +578,24 @@ export function PacientesDirectoryTable({
     );
   }
 
+  const rowHandlers: PacienteRowHandlers = {
+    onAssignServicio: setAssignServicioPaciente,
+    onViewQr: (p) => void viewPacienteQr(p.codigoQr),
+    onViewHistoria: setViewHistoriaPaciente,
+    onCreateHistoria: setCreateHistoriaPaciente,
+    onEdit: setEditTarget,
+    onDelete: canDeletePaciente
+      ? (p) => {
+          setDeleteError("");
+          setDeleteTarget(p);
+        }
+      : undefined,
+    getHistoriaStatus,
+    historiaLoading: historiaStatusLoading,
+  };
+
   return (
     <>
-      <PacienteDetailDialog
-        open={detailTarget != null}
-        paciente={detailTarget}
-        accessToken={accessToken}
-        onClose={() => setDetailTarget(null)}
-        hasHistoria={detailTarget ? hasHistoria(detailTarget.id) : false}
-        historiaLoading={historiaStatusLoading}
-        onViewQr={() => {
-          if (detailTarget) void viewPacienteQr(detailTarget.codigoQr);
-        }}
-        onViewHistoria={() => {
-          if (detailTarget) setViewHistoriaPaciente(detailTarget);
-        }}
-        onCreateHistoria={() => {
-          if (detailTarget) setCreateHistoriaPaciente(detailTarget);
-        }}
-        onEdit={() => {
-          if (detailTarget) setEditTarget(detailTarget);
-        }}
-        onDelete={() => {
-          if (detailTarget) {
-            setDeleteError("");
-            setDeleteTarget(detailTarget);
-          }
-        }}
-        canDelete={canDeletePaciente}
-      />
-
       <PacienteEditDialog
         open={editTarget != null}
         paciente={editTarget}
@@ -370,7 +603,6 @@ export function PacientesDirectoryTable({
         onClose={() => setEditTarget(null)}
         onUpdated={(paciente) => {
           setEditTarget(null);
-          if (detailTarget?.id === paciente.id) setDetailTarget(paciente);
           onPacienteUpdated?.(paciente);
         }}
       />
@@ -389,199 +621,129 @@ export function PacientesDirectoryTable({
         }}
       />
 
-      <TableScrollArea>
-        <Table className="min-w-[760px]">
-          <TableHeaderRow />
-          <TableBody>
-            {filteredItems.map((paciente, index) => {
-              const nombre = getPacienteNombre(paciente);
-              const edad = getPacienteEdad(paciente.fechaNacimiento);
-              const obraSocialLabel = formatPacienteObraSocial(paciente.obraSocial);
-              const obraSocialNombre =
-                obraSocialLabel !== "—" ? obraSocialLabel : null;
-              const conHistoria = hasHistoria(paciente.id);
+      <PacientesTable>
+        <TableHeaderRow />
+        <TableBody>
+          {filteredItems.map((paciente) => {
+            const nombre = getPacienteNombre(paciente);
+            const edad = getPacienteEdad(paciente.fechaNacimiento);
+            const obraSocialLabel = formatPacienteObraSocial(paciente.obraSocial);
+            const obraSocialNombre = obraSocialLabel !== "—" ? obraSocialLabel : null;
+            const localidadLabel = formatPacienteLocalidad(paciente.localidad);
+            const localidadNombre = localidadLabel !== "—" ? localidadLabel : null;
+            const contactoSecundario = [localidadNombre, paciente.direccion]
+              .filter(Boolean)
+              .join(" · ");
 
-              return (
-                <TableRow
-                  key={paciente.id}
-                  className={cn(
-                    "cursor-pointer transition-colors hover:bg-medical-secondary/50",
-                    index % 2 === 1 && "bg-medical-secondary/20"
-                  )}
-                  onClick={() => setDetailTarget(paciente)}
+            return (
+              <TableRow
+                key={paciente.id}
+                className="group transition-colors hover:bg-medical-secondary/30"
+              >
+                {/* Paciente */}
+                <TableCell
+                  className={cn(tdClass, "cursor-pointer")}
+                  onClick={() => openFichaFromRow(paciente)}
                 >
-                  {/* Paciente */}
-                  <TableCell className={tdClass}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-medical-secondary to-white text-xs font-bold text-medical-primary ring-1 ring-medical-primary/12">
-                        {getPacienteInitials(paciente)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold leading-snug text-medical-text">{nombre}</p>
-                        <p className="text-xs text-medical-mutedText">
-                          {edad} años · {formatPacienteSexo(paciente.sexo)}
-                        </p>
-                        {(() => {
-                          const summary = serviciosSummary[paciente.id];
-                          if (!accessToken) return null;
-                          if (!summary || summary.loading) {
-                            return (
-                              <p className="mt-1 text-xs text-medical-mutedText">
-                                Servicios: cargando…
-                              </p>
-                            );
-                          }
-                          if (summary.total <= 0) {
-                            return (
-                              <p className="mt-1 text-xs text-medical-mutedText">
-                                Servicios: —
-                              </p>
-                            );
-                          }
-                          const shown = summary.lines.slice(0, 2);
-                          const rest = Math.max(0, summary.total - shown.length);
-                          const label =
-                            shown.join(" · ") + (rest > 0 ? ` · +${rest}` : "");
-                          return (
-                            <p className="mt-1 text-xs text-medical-mutedText line-clamp-1">
-                              Disponibilidad: {label}
-                            </p>
-                          );
-                        })()}
-                        {obraSocialNombre ? (
-                          <span className="mt-1.5 inline-flex max-w-full items-center rounded-md border border-medical-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-medical-text lg:hidden">
-                            <span className="truncate">{obraSocialNombre}</span>
-                          </span>
-                        ) : null}
-                        <p className="mt-1 text-xs text-medical-mutedText md:hidden">
-                          DNI {paciente.numeroDocumento}
-                        </p>
-                        {paciente.telefono ? (
-                          <span className="mt-1 inline-flex items-center gap-1 text-xs text-medical-mutedText lg:hidden">
-                            <Phone className="size-3 shrink-0" />
-                            {paciente.telefono}
-                          </span>
-                        ) : null}
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-medical-secondary text-xs font-semibold text-medical-primary ring-1 ring-medical-border transition group-hover:ring-medical-primary/40">
+                      {getPacienteInitials(paciente)}
                     </div>
-                  </TableCell>
-
-                  {/* Documento */}
-                  <TableCell className={cn(tdClass, "hidden md:table-cell")}>
-                    <p className="font-medium text-medical-text">{paciente.numeroDocumento}</p>
-                    <p className="mt-0.5 text-xs text-medical-mutedText">
-                      Nac. {formatPacienteFechaNacimiento(paciente.fechaNacimiento)}
-                    </p>
-                  </TableCell>
-
-                  {/* Contacto */}
-                  <TableCell className={cn(tdClass, "hidden lg:table-cell")}>
-                    {paciente.telefono ? (
-                      <p className="flex items-center gap-1 font-medium text-medical-text">
-                        <Phone className="size-3 shrink-0 text-medical-mutedText" />
-                        {paciente.telefono}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold leading-snug text-foreground">
+                        {nombre}
                       </p>
-                    ) : (
-                      <span className="text-sm text-medical-mutedText">—</span>
-                    )}
-                    {paciente.direccion ? (
-                      <p className="mt-1 flex items-start gap-1 text-xs text-medical-mutedText">
-                        <MapPin className="mt-0.5 size-3 shrink-0" />
-                        <span className="line-clamp-2">{paciente.direccion}</span>
+                      <p className="text-xs text-muted-foreground">
+                        DNI {paciente.numeroDocumento} · {edad} años
+                      </p>
+                    </div>
+                  </div>
+                </TableCell>
+
+                {/* Servicios */}
+                <TableCell
+                  className={cn(tdClass, "hidden cursor-pointer sm:table-cell")}
+                  onClick={() => openFichaFromRow(paciente)}
+                >
+                  {accessToken ? (
+                    <ServiciosCell summary={serviciosSummary[paciente.id]} />
+                  ) : (
+                    <span className="text-xs text-medical-mutedText">—</span>
+                  )}
+                </TableCell>
+
+                {/* Contacto */}
+                <TableCell
+                  className={cn(tdClass, "hidden cursor-pointer lg:table-cell")}
+                  onClick={() => openFichaFromRow(paciente)}
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-sm font-medium leading-snug text-foreground">
+                      {paciente.telefono || "—"}
+                    </p>
+                    {contactoSecundario ? (
+                      <p
+                        className="max-w-52 truncate text-xs text-muted-foreground"
+                        title={contactoSecundario}
+                      >
+                        {contactoSecundario}
                       </p>
                     ) : null}
-                  </TableCell>
+                  </div>
+                </TableCell>
 
-                  {/* Afiliación */}
-                  <TableCell className={cn(tdClass, "hidden sm:table-cell")}>
-                    <p className="text-sm font-medium text-medical-text">
+                {/* Afiliación */}
+                <TableCell
+                  className={cn(tdClass, "hidden cursor-pointer md:table-cell")}
+                  onClick={() => openFichaFromRow(paciente)}
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <p
+                      className="max-w-48 truncate text-sm font-medium leading-snug text-foreground"
+                      title={obraSocialNombre ?? undefined}
+                    >
                       {obraSocialNombre ?? "—"}
                     </p>
-                    <p className="mt-0.5 font-mono text-xs text-medical-mutedText">
+                    <p className="font-mono text-xs text-muted-foreground">
                       {paciente.numeroAfiliado || "Sin nº afiliado"}
                     </p>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void viewPacienteQr(paciente.codigoQr);
-                      }}
-                      className="mt-1.5 inline-flex items-center gap-1 rounded-lg border border-medical-primary/20 bg-medical-secondary px-2 py-0.5 text-xs font-semibold text-medical-primaryDark transition-colors hover:border-medical-primary/40 md:hidden"
-                    >
-                      <QrCode className="size-3 shrink-0" />
-                      {paciente.codigoQr}
-                    </button>
-                  </TableCell>
+                  </div>
+                </TableCell>
 
-                  {/* Acciones */}
-                  <TableCell className={cn(tdClass, "text-right")}>
-                    <div
-                      className="flex items-center justify-end gap-0.5"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        aria-label="Asignar servicio al paciente"
-                        title="Asignar servicio"
-                        className="rounded-lg p-1.5 text-medical-mutedText transition-colors hover:bg-medical-primary/10 hover:text-medical-primary"
-                        onClick={() => setAssignServicioPaciente(paciente)}
-                      >
-                        <Plus className="size-4" />
-                      </button>
+                {/* Historia */}
+                <TableCell
+                  className={cn(tdClass, "hidden lg:table-cell")}
+                  onClick={(e: SyntheticEvent) => e.stopPropagation()}
+                >
+                  <HistoriaCell
+                    paciente={paciente}
+                    loading={historiaStatusLoading}
+                    status={getHistoriaStatus(paciente.id)}
+                    onViewHistoria={setViewHistoriaPaciente}
+                    onCreateHistoria={setCreateHistoriaPaciente}
+                  />
+                </TableCell>
 
-                      <button
-                        type="button"
-                        aria-label="Ver credencial QR"
-                        title="Ver QR"
-                        className="rounded-lg p-1.5 text-medical-mutedText transition-colors hover:bg-medical-primary/10 hover:text-medical-primary"
-                        onClick={() => void viewPacienteQr(paciente.codigoQr)}
-                      >
-                        <QrCode className="size-4" />
-                      </button>
-
-                      {historiaStatusLoading ? (
-                        <span className="rounded-lg p-1.5 text-medical-mutedText">
-                          <Loader2 className="size-4 animate-spin" />
-                        </span>
-                      ) : conHistoria ? (
-                        <button
-                          type="button"
-                          aria-label="Ver historia clínica"
-                          title="Ver historia clínica"
-                          className="rounded-lg p-1.5 text-medical-mutedText transition-colors hover:bg-medical-primary/10 hover:text-medical-primary"
-                          onClick={() => setViewHistoriaPaciente(paciente)}
-                        >
-                          <ClipboardList className="size-4" />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          aria-label="Crear historia clínica"
-                          title="Crear historia"
-                          className="rounded-lg p-1.5 text-medical-mutedText transition-colors hover:bg-medical-primary/10 hover:text-medical-primary"
-                          onClick={() => setCreateHistoriaPaciente(paciente)}
-                        >
-                          <FilePlus className="size-4" />
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        aria-label="Ver detalles del paciente"
-                        title="Ver detalles"
-                        className="rounded-lg p-1.5 text-medical-mutedText transition-colors hover:bg-medical-primary/10 hover:text-medical-primary"
-                        onClick={() => setDetailTarget(paciente)}
-                      >
-                        <Eye className="size-4" />
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableScrollArea>
+                {/* Acciones */}
+                <TableCell
+                  className={cn(tdClass, "text-right")}
+                  onClick={(e: SyntheticEvent) => e.stopPropagation()}
+                  onPointerDown={(e: SyntheticEvent) => e.stopPropagation()}
+                >
+                  <div className="flex min-h-9 items-center justify-end">
+                    <PacienteRowActionsMenu
+                      paciente={paciente}
+                      navigateToFicha={navigateToFicha}
+                      runMenuAction={runMenuAction}
+                      {...rowHandlers}
+                    />
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </PacientesTable>
 
       <PacienteQrDialog
         open={qrOpen}
@@ -596,6 +758,11 @@ export function PacientesDirectoryTable({
         paciente={viewHistoriaPaciente}
         accessToken={accessToken}
         onClose={() => setViewHistoriaPaciente(null)}
+        onCreateHistoria={() => {
+          const target = viewHistoriaPaciente;
+          setViewHistoriaPaciente(null);
+          if (target) setCreateHistoriaPaciente(target);
+        }}
       />
 
       <CreateHistoriaClinicaDialog
@@ -613,25 +780,34 @@ export function PacientesDirectoryTable({
         open={assignServicioPaciente != null}
         paciente={assignServicioPaciente}
         accessToken={accessToken}
+        userRoles={userRoles}
         dismissLabel="Cerrar"
         onFinish={() => setAssignServicioPaciente(null)}
         onAssigned={(asignacion) => {
-          setServiciosSummary((prev) => {
-            const id = asignacion.pacienteId;
-            const current = prev[id] ?? { loading: false, lines: [], total: 0 };
-            const name = asignacion.servicio?.nombre ?? `Servicio #${asignacion.servicioId}`;
-            const nextLines = current.lines.includes(name)
-              ? current.lines
-              : [`${name} · disp. n/d`, ...current.lines].slice(0, 6);
-            return {
+          const id = asignacion.pacienteId;
+          if (accessToken) {
+            setServiciosSummary((prev) => ({
               ...prev,
               [id]: {
-                loading: false,
-                lines: nextLines,
-                total: Math.max(current.total + 1, nextLines.length),
+                loading: true,
+                nombres: prev[id]?.nombres ?? [],
+                total: prev[id]?.total ?? 0,
               },
-            };
-          });
+            }));
+            void fetchServiciosResumenPaciente(accessToken, id)
+              .then((res) => {
+                setServiciosSummary((prev) => ({
+                  ...prev,
+                  [id]: { loading: false, ...res },
+                }));
+              })
+              .catch(() => {
+                setServiciosSummary((prev) => ({
+                  ...prev,
+                  [id]: { loading: false, nombres: [], total: 0 },
+                }));
+              });
+          }
           onServicioAssigned?.(asignacion);
         }}
       />

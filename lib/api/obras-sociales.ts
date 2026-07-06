@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
+import { fetchAllPaginatedItems } from "@/lib/api/list-pagination";
 import type {
   CreateObraSocialBody,
   ObraSocialDto,
@@ -66,6 +67,16 @@ export async function listObrasSocialesWithApi(
     { method: "GET", token }
   );
   return normalizeList(data);
+}
+
+/** Listado completo para exportación (respeta filtros de búsqueda y estado). */
+export async function listObrasSocialesAllWithApi(
+  token: string,
+  options?: Omit<ListObrasSocialesOptions, "page" | "pageSize">
+): Promise<ObraSocialDto[]> {
+  return fetchAllPaginatedItems((page, pageSize) =>
+    listObrasSocialesWithApi(token, { ...options, page, pageSize })
+  );
 }
 
 export async function getObraSocialByIdWithApi(

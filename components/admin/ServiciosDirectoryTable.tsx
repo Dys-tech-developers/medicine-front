@@ -1,15 +1,35 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
-import { Layers, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
+import type { ReactNode, SyntheticEvent } from "react";
+import { useCallback, useRef, useState } from "react";
+import {
+  Eye,
+  Layers,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
+import { ServicioDetailDialog } from "@/components/admin/ServicioDetailDialog";
 import { ServicioEditDialog } from "@/components/admin/ServicioEditDialog";
+import { ServicioDeleteConfirmDialog } from "@/components/admin/ServicioDeleteConfirmDialog";
 import { ServicioEstadoConfirmDialog } from "@/components/admin/ServicioEstadoConfirmDialog";
 import { ServicioPacientesDialog } from "@/components/admin/ServicioPacientesDialog";
-import { ServicioTarifasCell } from "@/components/admin/ServicioTarifasCell";
 import { ServiciosDirectoryTableSkeleton } from "@/components/skeletons/dashboard-skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -24,20 +44,25 @@ import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import {
   deleteServicioWithApi,
+  getServicioByIdWithApi,
   updateServicioEstadoWithApi,
 } from "@/lib/api/servicios";
 import type { ServicioConTarifasDto } from "@/lib/api/types";
-import { getServicioPacientesCount } from "@/lib/servicios-display";
+import { canDeleteServicio, getServicioDeleteErrorMessage } from "@/lib/servicios-access";
+import {
+  formatServicioModoVisita,
+  formatTarifasResumenValores,
+  getPacienteAsignadoNombre,
+  getServicioPacientesCount,
+} from "@/lib/servicios-display";
 import {
   DEFAULT_MIN_LOADING_MS,
   delayRemaining,
 } from "@/lib/loading/minimum-duration";
 import { cn } from "@/lib/utils";
 
-function TableScrollArea({ children }: { children: ReactNode }) {
-  return (
-    <div className="overflow-x-auto px-4 py-4 sm:px-6 sm:py-5">{children}</div>
-  );
+function ServiciosTable({ children }: { children: ReactNode }) {
+  return <Table className="min-w-[760px]">{children}</Table>;
 }
 
 export type ServiciosDirectoryTableProps = {
@@ -46,6 +71,7 @@ export type ServiciosDirectoryTableProps = {
   loading: boolean;
   error: string;
   accessToken: string;
+  userRoles: string[];
   onRetry: () => void;
   onServicioUpdated: (servicio: ServicioConTarifasDto) => void;
   onServicioRemoved: (id: number) => void;
@@ -53,19 +79,179 @@ export type ServiciosDirectoryTableProps = {
   onCreate: () => void;
 };
 
+const thClass =
+  "h-11 px-4 text-xs font-medium text-muted-foreground first:pl-6 last:pr-6 sm:px-5";
+const tdClass = "px-4 py-3 align-middle first:pl-6 last:pr-6 sm:px-5";
+
+type ServicioRowHandlers = {
+  onViewDetail: (servicio: ServicioConTarifasDto) => void;
+  onEdit: (servicio: ServicioConTarifasDto) => void;
+  onViewPacientes: (servicio: ServicioConTarifasDto) => void;
+  onDelete?: (servicio: ServicioConTarifasDto) => void;
+};
+
+function TarifasCell({ tarifas }: { tarifas: ServicioConTarifasDto["tarifas"] }) {
+  const list = tarifas ?? [];
+  const count = list.length;
+
+  if (count === 0) {
+    return <span className="text-xs text-medical-mutedText">Sin tarifas</span>;
+  }
+
+  const resumen = formatTarifasResumenValores(list);
+
+  return (
+    <div className="min-w-0 space-y-0.5">
+      <p className="text-sm font-medium leading-snug text-medical-primaryDark">
+        {count} tarifa{count === 1 ? "" : "s"}
+      </p>
+      <p className="max-w-52 truncate text-xs text-muted-foreground" title={resumen}>
+        {resumen}
+      </p>
+    </div>
+  );
+}
+
+function PacientesCell({ servicio }: { servicio: ServicioConTarifasDto }) {
+  const count = getServicioPacientesCount(servicio);
+
+  if (count === 0) {
+    return <span className="text-xs text-medical-mutedText">Sin pacientes</span>;
+  }
+
+  const nombres = (servicio.pacientes ?? []).map(getPacienteAsignadoNombre).join(", ");
+
+  return (
+    <div className="min-w-0 space-y-0.5">
+      <p className="text-sm font-medium leading-snug text-medical-primaryDark">
+        {count} asignado{count === 1 ? "" : "s"}
+      </p>
+      <p className="max-w-52 truncate text-xs text-muted-foreground" title={nombres}>
+        {nombres}
+      </p>
+    </div>
+  );
+}
+
+function ServicioRowActionsMenu({
+  servicio,
+  runMenuAction,
+  onViewDetail,
+  onEdit,
+  onViewPacientes,
+  onDelete,
+  busy,
+}: {
+  servicio: ServicioConTarifasDto;
+  runMenuAction: (action: () => void) => void;
+  busy: boolean;
+} & ServicioRowHandlers) {
+  const count = getServicioPacientesCount(servicio);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          className="size-8 cursor-pointer p-0 text-medical-mutedText hover:bg-medical-secondary hover:text-medical-text"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="size-4" />
+          <span className="sr-only">Acciones de {servicio.nombre}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="z-120 w-56 border-medical-border bg-white p-1 shadow-lg"
+      >
+        <DropdownMenuLabel className="px-2 py-1.5 text-xs font-semibold text-medical-text">
+          {servicio.nombre}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="bg-medical-border" />
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+          onSelect={() => runMenuAction(() => onViewDetail(servicio))}
+        >
+          <Eye className="size-4 text-medical-primary" />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span>Ver detalle</span>
+            <span className="text-[11px] font-normal text-medical-mutedText">
+              Tarifas, pacientes y configuración
+            </span>
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+          onSelect={() => runMenuAction(() => onEdit(servicio))}
+        >
+          <Pencil className="size-4 text-medical-primary" />
+          Editar servicio y tarifas
+        </DropdownMenuItem>
+        {count > 0 ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+            onSelect={() => runMenuAction(() => onViewPacientes(servicio))}
+          >
+            <Users className="size-4 text-medical-primary" />
+            Ver pacientes ({count})
+          </DropdownMenuItem>
+        ) : null}
+        {onDelete ? (
+          <>
+            <DropdownMenuSeparator className="bg-medical-border" />
+            <DropdownMenuItem
+              className="cursor-pointer gap-2 rounded-lg text-medical-danger focus:bg-medical-danger/10 focus:text-medical-danger"
+              onSelect={() => runMenuAction(() => onDelete(servicio))}
+            >
+              <Trash2 className="size-4" />
+              Eliminar servicio
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TableHeaderRow() {
+  return (
+    <TableHeader>
+      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+        <TableHead className={thClass}>Servicio</TableHead>
+        <TableHead className={cn(thClass, "hidden md:table-cell")}>Tarifas</TableHead>
+        <TableHead className={cn(thClass, "hidden lg:table-cell")}>Pacientes</TableHead>
+        <TableHead className={cn(thClass, "hidden sm:table-cell")}>Estado</TableHead>
+        <TableHead className={cn(thClass, "w-14 text-right")}>
+          <span className="sr-only">Acciones</span>
+        </TableHead>
+      </TableRow>
+    </TableHeader>
+  );
+}
+
 export function ServiciosDirectoryTable({
   items,
   filteredItems,
   loading,
   error,
   accessToken,
+  userRoles,
   onRetry,
   onServicioUpdated,
   onServicioRemoved,
   onNotify,
   onCreate,
 }: ServiciosDirectoryTableProps) {
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const blockNavigationRef = useRef(false);
+  const [deleteTarget, setDeleteTarget] = useState<ServicioConTarifasDto | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteRefreshing, setDeleteRefreshing] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const canDelete = canDeleteServicio(userRoles);
+  const [detailTarget, setDetailTarget] = useState<ServicioConTarifasDto | null>(null);
   const [editTarget, setEditTarget] = useState<ServicioConTarifasDto | null>(null);
   const [editFocusTarifaId, setEditFocusTarifaId] = useState<number | null>(null);
   const [editAddTarifa, setEditAddTarifa] = useState(false);
@@ -76,6 +262,32 @@ export function ServiciosDirectoryTable({
     nextEstado: boolean;
   } | null>(null);
   const [estadoConfirmLoading, setEstadoConfirmLoading] = useState(false);
+
+  const openDetail = useCallback((servicio: ServicioConTarifasDto) => {
+    setDetailTarget(servicio);
+  }, []);
+
+  const openEdit = useCallback((servicio: ServicioConTarifasDto) => {
+    setEditFocusTarifaId(null);
+    setEditAddTarifa(false);
+    setEditTarget(servicio);
+  }, []);
+
+  const openDetailFromRow = useCallback(
+    (servicio: ServicioConTarifasDto) => {
+      if (blockNavigationRef.current) {
+        blockNavigationRef.current = false;
+        return;
+      }
+      openDetail(servicio);
+    },
+    [openDetail]
+  );
+
+  const runMenuAction = useCallback((action: () => void) => {
+    blockNavigationRef.current = true;
+    action();
+  }, []);
 
   const openEstadoConfirm = useCallback((servicio: ServicioConTarifasDto, nextEstado: boolean) => {
     setEstadoConfirm({ servicio, nextEstado });
@@ -98,10 +310,9 @@ export function ServiciosDirectoryTable({
         estado: nextEstado,
       });
       await delayRemaining(DEFAULT_MIN_LOADING_MS, startedAt);
-      onServicioUpdated({
-        ...servicio,
-        estado: updated.estado,
-      });
+      const next = { ...servicio, estado: updated.estado };
+      onServicioUpdated(next);
+      if (detailTarget?.id === servicio.id) setDetailTarget(next);
       onNotify(
         nextEstado ? "Servicio activado" : "Servicio desactivado",
         "success",
@@ -117,78 +328,69 @@ export function ServiciosDirectoryTable({
     } finally {
       setEstadoConfirmLoading(false);
     }
-  }, [accessToken, estadoConfirm, onNotify, onServicioUpdated]);
+  }, [accessToken, detailTarget?.id, estadoConfirm, onNotify, onServicioUpdated]);
 
-  const handleDelete = useCallback(
-    async (servicio: ServicioConTarifasDto) => {
-      const count = getServicioPacientesCount(servicio);
-      if (count > 0) {
-        onNotify(
-          "No se puede eliminar: el servicio está asignado a uno o más pacientes.",
-          "error",
-          servicio.nombre
-        );
-        return;
-      }
+  const closeDeleteConfirm = useCallback(() => {
+    if (deleteLoading) return;
+    setDeleteTarget(null);
+    setDeleteRefreshing(false);
+    setDeleteError("");
+  }, [deleteLoading]);
 
-      const confirmed = window.confirm(
-        `¿Eliminar el servicio «${servicio.nombre}»? Esta acción no se puede deshacer.`
-      );
-      if (!confirmed) return;
-
-      setDeletingId(servicio.id);
-      try {
-        await deleteServicioWithApi(accessToken, servicio.id);
-        onNotify("Servicio eliminado", "success", servicio.nombre);
-        onServicioRemoved(servicio.id);
-      } catch (err) {
-        const msg =
-          err instanceof ApiError
-            ? getApiErrorMessages(err).join(" ")
-            : "No se pudo eliminar el servicio.";
-        onNotify(msg, "error", servicio.nombre);
-      } finally {
-        setDeletingId(null);
-      }
+  const openDeleteConfirm = useCallback(
+    (servicio: ServicioConTarifasDto) => {
+      setDeleteTarget(servicio);
+      setDeleteError("");
+      setDeleteRefreshing(true);
+      void getServicioByIdWithApi(accessToken, servicio.id)
+        .then((fresh) => {
+          onServicioUpdated(fresh);
+          setDeleteTarget(fresh);
+        })
+        .catch(() => {
+          // Si falla la revalidación, usamos el ítem de la lista.
+        })
+        .finally(() => {
+          setDeleteRefreshing(false);
+        });
     },
-    [accessToken, onNotify, onServicioRemoved]
+    [accessToken, onServicioUpdated]
   );
 
-  const tableHeadClass =
-    "px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-medical-primaryDark first:pl-6 last:pr-6 sm:px-6";
-  const tableCellClass =
-    "px-5 py-5 align-top whitespace-normal first:pl-6 last:pr-6 sm:px-6";
+  const confirmDeleteServicio = useCallback(async () => {
+    if (!deleteTarget || getServicioPacientesCount(deleteTarget) > 0) return;
 
-  const tableHeader = (
-    <TableHeader>
-      <TableRow className="bg-medical-secondary/90 hover:bg-medical-secondary/90">
-        <TableHead className={tableHeadClass}>Servicio</TableHead>
-        <TableHead className={cn(tableHeadClass, "hidden md:table-cell w-[200px]")}>
-          Tarifas
-        </TableHead>
-        <TableHead className={cn(tableHeadClass, "hidden lg:table-cell")}>
-          Pacientes
-        </TableHead>
-        <TableHead className={tableHeadClass}>Estado</TableHead>
-        <TableHead className={cn(tableHeadClass, "w-[140px]")}> </TableHead>
-      </TableRow>
-    </TableHeader>
-  );
+    setDeleteLoading(true);
+    setDeleteError("");
+    try {
+      await deleteServicioWithApi(accessToken, deleteTarget.id);
+      onNotify("Servicio eliminado", "success", deleteTarget.nombre);
+      onServicioRemoved(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? getServicioDeleteErrorMessage(err)
+          : "No se pudo eliminar el servicio.";
+      setDeleteError(msg);
+      onNotify(msg, "error", deleteTarget.nombre);
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [accessToken, deleteTarget, onNotify, onServicioRemoved]);
 
   if (loading) {
     return (
-      <TableScrollArea>
-        <Table className="min-w-[880px]">
-          {tableHeader}
-          <ServiciosDirectoryTableSkeleton rows={6} cellClassName={tableCellClass} />
-        </Table>
-      </TableScrollArea>
+      <ServiciosTable>
+        <TableHeaderRow />
+        <ServiciosDirectoryTableSkeleton rows={5} cellClassName={tdClass} />
+      </ServiciosTable>
     );
   }
 
   if (error) {
     return (
-      <TableScrollArea>
+      <div className="px-5 py-8 sm:px-7">
         <EmptyState
           variant="error"
           icon={Layers}
@@ -198,20 +400,20 @@ export function ServiciosDirectoryTable({
             <Button
               type="button"
               onClick={onRetry}
-              className="bg-medical-primary cursor-pointer hover:bg-medical-primaryDark"
+              className="bg-medical-primary hover:bg-medical-primaryDark"
             >
               <RefreshCw className="size-4" />
               Reintentar
             </Button>
           }
         />
-      </TableScrollArea>
+      </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <TableScrollArea>
+      <div className="px-5 py-8 sm:px-7">
         <EmptyState
           icon={Layers}
           title="Sin servicios registrados"
@@ -220,28 +422,35 @@ export function ServiciosDirectoryTable({
             <Button
               type="button"
               onClick={onCreate}
-              className="bg-medical-primary hover:cursor-pointer hover:bg-medical-primaryDark"
+              className="bg-medical-primary hover:bg-medical-primaryDark"
             >
               <Plus className="size-4" />
               Nuevo servicio
             </Button>
           }
         />
-      </TableScrollArea>
+      </div>
     );
   }
 
   if (filteredItems.length === 0) {
     return (
-      <TableScrollArea>
+      <div className="px-5 py-8 sm:px-7">
         <EmptyState
           icon={Search}
           title="Sin coincidencias"
           description="Probá con otro término de búsqueda."
         />
-      </TableScrollArea>
+      </div>
     );
   }
+
+  const rowHandlers: ServicioRowHandlers = {
+    onViewDetail: openDetail,
+    onEdit: openEdit,
+    onViewPacientes: setPacientesDialogServicio,
+    onDelete: canDelete ? openDeleteConfirm : undefined,
+  };
 
   return (
     <>
@@ -252,6 +461,28 @@ export function ServiciosDirectoryTable({
         loading={estadoConfirmLoading}
         onConfirm={() => void confirmEstadoChange()}
         onCancel={closeEstadoConfirm}
+      />
+      <ServicioDeleteConfirmDialog
+        open={deleteTarget != null}
+        servicio={deleteTarget}
+        loading={deleteLoading}
+        refreshing={deleteRefreshing}
+        error={deleteError}
+        onConfirm={() => void confirmDeleteServicio()}
+        onCancel={closeDeleteConfirm}
+      />
+      <ServicioDetailDialog
+        open={detailTarget != null}
+        servicio={detailTarget}
+        onClose={() => setDetailTarget(null)}
+        onEdit={(s) => {
+          setDetailTarget(null);
+          openEdit(s);
+        }}
+        onVerPacientes={(s) => {
+          setDetailTarget(null);
+          setPacientesDialogServicio(s);
+        }}
       />
       <ServicioEditDialog
         open={editTarget != null}
@@ -267,6 +498,7 @@ export function ServiciosDirectoryTable({
         onUpdated={(updated) => {
           onServicioUpdated(updated);
           setEditTarget(updated);
+          if (detailTarget?.id === updated.id) setDetailTarget(updated);
         }}
         onNotify={onNotify}
       />
@@ -275,129 +507,85 @@ export function ServiciosDirectoryTable({
         servicio={pacientesDialogServicio}
         onClose={() => setPacientesDialogServicio(null)}
       />
-      <TableScrollArea>
-      <Table className="min-w-[880px]">
-        {tableHeader}
+
+      <ServiciosTable>
+        <TableHeaderRow />
         <TableBody>
-          {filteredItems.map((servicio, index) => {
-            const count = getServicioPacientesCount(servicio);
+          {filteredItems.map((servicio) => {
             const tarifas = servicio.tarifas ?? [];
             const activo = servicio.estado;
             const isPendingEstado =
               estadoConfirm?.servicio.id === servicio.id && estadoConfirmLoading;
-            const isDeleting = deletingId === servicio.id;
-            const modalOpen = estadoConfirm != null || editTarget != null;
+            const isDeleting = deleteTarget?.id === servicio.id && deleteLoading;
+            const modalOpen =
+              estadoConfirm != null ||
+              editTarget != null ||
+              detailTarget != null ||
+              deleteTarget != null;
             const busy = isPendingEstado || isDeleting || modalOpen;
+            const modoVisita = formatServicioModoVisita(servicio);
+            const subtitulo =
+              servicio.descripcion?.trim() ||
+              modoVisita;
 
             return (
               <TableRow
                 key={servicio.id}
-                className={cn(
-                  "hover:bg-medical-secondary/40",
-                  index % 2 === 1 && "bg-medical-secondary/20",
-                  !activo && "opacity-80"
-                )}
+                className="group transition-colors hover:bg-medical-secondary/30"
               >
-                <TableCell className={tableCellClass}>
-                  <div className="flex items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-medical-secondary to-white text-medical-primary ring-1 ring-medical-primary/12">
-                      <Layers className="size-4" />
+                <TableCell
+                  className={cn(tdClass, "cursor-pointer")}
+                  onClick={() => openDetailFromRow(servicio)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-medical-secondary text-medical-primary ring-1 ring-medical-border transition group-hover:ring-medical-primary/40">
+                      <Layers className="size-4" aria-hidden />
                     </div>
                     <div className="min-w-0">
                       <p
                         className={cn(
-                          "font-semibold text-medical-text",
-                          !activo && "text-medical-mutedText"
+                          "truncate text-sm font-semibold leading-snug text-foreground",
+                          !activo && "text-muted-foreground"
                         )}
                       >
                         {servicio.nombre}
                       </p>
-                      {servicio.descripcion ? (
-                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-medical-mutedText">
-                          {servicio.descripcion}
-                        </p>
-                      ) : null}
-                      <ServicioTarifasCell
-                        variant="inline"
-                        servicioNombre={servicio.nombre}
-                        tarifas={tarifas}
-                        disabled={busy}
-                        onEditTarifa={(tarifaId) => {
-                          setEditAddTarifa(false);
-                          setEditFocusTarifaId(tarifaId);
-                          setEditTarget(servicio);
-                        }}
-                        onAddTarifa={() => {
-                          setEditFocusTarifaId(null);
-                          setEditAddTarifa(true);
-                          setEditTarget(servicio);
-                        }}
-                        onManageServicio={() => {
-                          setEditFocusTarifaId(null);
-                          setEditAddTarifa(false);
-                          setEditTarget(servicio);
-                        }}
-                      />
-                      {count > 0 ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="mt-2 h-8 border-medical-primary/25 text-xs font-medium text-medical-primary cursor-pointer lg:hidden"
-                          onClick={() => setPacientesDialogServicio(servicio)}
-                        >
-                          <Users className="size-3.5" />
-                          Ver {count} paciente{count === 1 ? "" : "s"}
-                        </Button>
-                      ) : (
-                        <p className="mt-1.5 text-xs text-medical-mutedText lg:hidden">
-                          Sin pacientes asignados
-                        </p>
-                      )}
+                      <p
+                        className="max-w-52 truncate text-xs text-muted-foreground"
+                        title={subtitulo}
+                      >
+                        {subtitulo}
+                      </p>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className={cn(tableCellClass, "hidden py-4 md:table-cell")}>
-                  <ServicioTarifasCell
-                    servicioNombre={servicio.nombre}
-                    tarifas={tarifas}
-                    disabled={busy}
-                    onEditTarifa={(tarifaId) => {
-                      setEditAddTarifa(false);
-                      setEditFocusTarifaId(tarifaId);
-                      setEditTarget(servicio);
-                    }}
-                    onAddTarifa={() => {
-                      setEditFocusTarifaId(null);
-                      setEditAddTarifa(true);
-                      setEditTarget(servicio);
-                    }}
-                    onManageServicio={() => {
-                      setEditFocusTarifaId(null);
-                      setEditAddTarifa(false);
-                      setEditTarget(servicio);
-                    }}
-                  />
+
+                <TableCell
+                  className={cn(tdClass, "hidden cursor-pointer md:table-cell")}
+                  onClick={() => openDetailFromRow(servicio)}
+                >
+                  <TarifasCell tarifas={tarifas} />
                 </TableCell>
-                <TableCell className={cn(tableCellClass, "hidden lg:table-cell")}>
-                  {count === 0 ? (
-                    <span className="text-sm text-medical-mutedText">Ninguno</span>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      className="border-medical-primary/25 cursor-pointer font-semibold text-medical-primary hover:bg-medical-secondary"
-                      onClick={() => setPacientesDialogServicio(servicio)}
-                    >
-                      <Users className="size-3.5" />
-                      Ver pacientes ({count})
-                    </Button>
-                  )}
+
+                <TableCell
+                  className={cn(tdClass, "hidden cursor-pointer lg:table-cell")}
+                  onClick={() => {
+                    if (getServicioPacientesCount(servicio) > 0) {
+                      blockNavigationRef.current = true;
+                      setPacientesDialogServicio(servicio);
+                    } else {
+                      openDetailFromRow(servicio);
+                    }
+                  }}
+                >
+                  <PacientesCell servicio={servicio} />
                 </TableCell>
-                <TableCell className={tableCellClass}>
-                  <div className="flex items-center gap-3">
+
+                <TableCell
+                  className={cn(tdClass, "hidden sm:table-cell")}
+                  onClick={(e: SyntheticEvent) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-2.5">
                     <Switch
                       id={`servicio-estado-${servicio.id}`}
                       checked={activo}
@@ -409,14 +597,15 @@ export function ServiciosDirectoryTable({
                       id={`servicio-estado-label-${servicio.id}`}
                       htmlFor={`servicio-estado-${servicio.id}`}
                       className={cn(
-                        "text-sm font-medium text-medical-text",
-                        busy ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+                        "text-xs font-medium",
+                        busy ? "cursor-not-allowed opacity-70" : "cursor-pointer",
+                        activo ? "text-medical-success" : "text-medical-mutedText"
                       )}
                     >
                       {isPendingEstado ? (
-                        <span className="inline-flex items-center gap-1.5 text-medical-mutedText">
-                          <Loader2 className="size-3.5 animate-spin" />
-                          Actualizando…
+                        <span className="inline-flex items-center gap-1.5">
+                          <Loader2 className="size-3 animate-spin" />
+                          …
                         </span>
                       ) : activo ? (
                         "Activo"
@@ -426,52 +615,26 @@ export function ServiciosDirectoryTable({
                     </Label>
                   </div>
                 </TableCell>
-                <TableCell className={tableCellClass}>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      title="Editar servicio y tarifas"
-                      className="cursor-pointer border-medical-primary/25 text-medical-primary hover:bg-medical-secondary"
-                      onClick={() => {
-                        setEditFocusTarifaId(null);
-                        setEditAddTarifa(false);
-                        setEditTarget(servicio);
-                      }}
-                    >
-                      <Pencil className="size-3.5" />
-                      <span className="sr-only">Editar</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={busy || count > 0}
-                      title={
-                        count > 0
-                          ? "No se puede eliminar: está asignado a pacientes"
-                          : "Eliminar servicio"
-                      }
-                      className="border-medical-danger/30 text-medical-danger cursor-pointer hover:bg-medical-danger/10 hover:text-medical-danger"
-                      onClick={() => void handleDelete(servicio)}
-                    >
-                      {isDeleting ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-3.5" />
-                      )}
-                      <span className="sr-only">Eliminar</span>
-                    </Button>
+
+                <TableCell
+                  className={cn(tdClass, "text-right")}
+                  onClick={(e: SyntheticEvent) => e.stopPropagation()}
+                  onPointerDown={(e: SyntheticEvent) => e.stopPropagation()}
+                >
+                  <div className="flex min-h-9 items-center justify-end">
+                    <ServicioRowActionsMenu
+                      servicio={servicio}
+                      runMenuAction={runMenuAction}
+                      busy={busy}
+                      {...rowHandlers}
+                    />
                   </div>
                 </TableCell>
               </TableRow>
             );
           })}
         </TableBody>
-      </Table>
-    </TableScrollArea>
+      </ServiciosTable>
     </>
   );
 }

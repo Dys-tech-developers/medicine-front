@@ -6,7 +6,6 @@ import {
   Calendar,
   Clock,
   ClipboardList,
-  DollarSign,
   Loader2,
   MessageSquare,
   Package,
@@ -27,9 +26,7 @@ import {
   VISITA_TIEMPO_MAX,
   VISITA_TIEMPO_MIN,
 } from "@/lib/prestador-visitas";
-import { MODALIDAD_COBRO_LABELS } from "@/lib/servicios-tarifas-labels";
 import {
-  formatPacienteServicioEstado,
   formatVisitaDateOnly,
   formatVisitaDuracion,
   formatVisitaFecha,
@@ -37,7 +34,8 @@ import {
   getPacienteNombre,
   getVisitaPacienteDocumento,
 } from "@/lib/visitas-display";
-import { MEDICAL_UI, visitaEstadoBadgeClass } from "@/lib/medical-ui-classes";
+import { formatVisitaEstado, visitaEstadoBadgeClass } from "@/lib/visita-estado-labels";
+import { MEDICAL_UI } from "@/lib/medical-ui-classes";
 import { cn } from "@/lib/utils";
 
 function SectionTitle({
@@ -115,7 +113,7 @@ export function PrestadorVisitaDetailDialog({
       return;
     }
     setFechaInicioLocal(isoToDatetimeLocalValue(visita.fechaInicio ?? visita.fecha));
-    setTiempoMinutos(visita.tiempoMinutos);
+    setTiempoMinutos(visita.tiempoMinutos ?? "");
     setObservaciones(visita.observaciones ?? "");
     setFormError("");
   }, [open, visita]);
@@ -184,10 +182,8 @@ export function PrestadorVisitaDetailDialog({
   if (!open || !visita || typeof document === "undefined") return null;
 
   const servicio = visita.pacienteServicio?.servicio;
-  const estado = visita.pacienteServicio?.estado;
   const insumos = visita.insumos ?? [];
   const totalInsumos = insumos.reduce((sum, i) => sum + i.cantidad, 0);
-  const finanzas = visita.finanzas;
   const documento = getVisitaPacienteDocumento(visita);
 
   return createPortal(
@@ -256,20 +252,16 @@ export function PrestadorVisitaDetailDialog({
             </span>
             <span className="text-[11px] text-medical-mutedText sm:text-xs">Servicio</span>
           </div>
-          <div className="flex min-w-0 flex-col items-center gap-0.5 px-2 py-2.5 sm:px-3 sm:py-3">
-            {estado ? (
-              <span
-                className={cn(
-                  "max-w-full truncate rounded-md border px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-xs",
-                  visitaEstadoBadgeClass(estado)
-                )}
-              >
-                {formatPacienteServicioEstado(estado)}
-              </span>
-            ) : (
-              <span className="text-sm font-semibold text-medical-mutedText">—</span>
-            )}
-            <span className="text-[11px] text-medical-mutedText sm:text-xs">Asignación</span>
+          <div className="flex min-w-0 flex-col items-center gap-0.5 px-2 py-2.5 text-center sm:px-3 sm:py-3">
+            <span
+              className={cn(
+                "max-w-full truncate rounded-md border px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-xs",
+                visitaEstadoBadgeClass(visita.estado)
+              )}
+            >
+              {formatVisitaEstado(visita.estado)}
+            </span>
+            <span className="text-[11px] text-medical-mutedText sm:text-xs">Estado</span>
           </div>
         </div>
 
@@ -348,20 +340,6 @@ export function PrestadorVisitaDetailDialog({
                   ) : null}
                 </InfoCard>
               </section>
-
-              {finanzas ? (
-                <section>
-                  <SectionTitle icon={DollarSign}>Liquidación</SectionTitle>
-                  <InfoCard>
-                    <InfoRow label="Modalidad">
-                      {MODALIDAD_COBRO_LABELS[finanzas.modalidadCobro] ?? finanzas.modalidadCobro}
-                    </InfoRow>
-                    <InfoRow label="Valor aplicado" mono>
-                      ${finanzas.valorAplicado}
-                    </InfoRow>
-                  </InfoCard>
-                </section>
-              ) : null}
 
               <section>
                 <SectionTitle icon={Package}>

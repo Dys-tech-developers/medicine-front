@@ -58,6 +58,13 @@ export type CreatePrestadorBody = {
   cbu: string;
   regimenIva: RegimenIva;
   estado?: boolean;
+  /** Servicios habilitados para el prestador (sin duplicados). */
+  servicioIds?: number[];
+};
+
+export type UpdatePrestadorServiciosBody = {
+  /** Reemplaza la lista completa; `[]` quita todas las habilitaciones. */
+  servicioIds: number[];
 };
 
 export type PrestadorEstadoCuentaFinanzasDto = {
@@ -76,6 +83,12 @@ export type PrestadorEstadoCuentaDto = {
   montoPendiente: string;
 };
 
+export type PrestadorServicioResumenDto = {
+  id: number;
+  nombre?: string;
+  estado?: boolean;
+};
+
 export type PrestadorListItemDto = {
   id: number;
   userId: number;
@@ -92,6 +105,8 @@ export type PrestadorListItemDto = {
   usuarioEstado: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Servicios asociados en `prestador_servicios` (si el listado los incluye). */
+  servicios?: PrestadorServicioResumenDto[];
   /** Presente cuando el listado incluye filtros de período. */
   estadoCuenta?: PrestadorEstadoCuentaDto;
 };
@@ -126,6 +141,10 @@ export type UpdateInsumoBody = {
   requiereVencimiento?: boolean;
   fechaVencimiento?: string | null;
   estado?: boolean;
+};
+
+export type DeleteInsumosBulkBody = {
+  ids: number[];
 };
 
 export type InsumoListItemDto = {
@@ -183,6 +202,8 @@ export type VisitaPrestadorResumenDto = {
   email: string;
 };
 
+export type VisitaEstado = "iniciada" | "finalizada" | "cancelada";
+
 export type VisitaInsumoResumenDto = {
   id: number;
   insumoId: number;
@@ -195,8 +216,9 @@ export type VisitaListItemDto = {
   id: number;
   pacienteServicioId: number;
   prestadorId: number;
+  estado: VisitaEstado;
   fecha: string;
-  tiempoMinutos: number;
+  tiempoMinutos: number | null;
   observaciones: string | null;
   createdAt: string;
   updatedAt: string;
@@ -204,6 +226,12 @@ export type VisitaListItemDto = {
   prestador: VisitaPrestadorResumenDto;
   insumos: VisitaInsumoResumenDto[];
   finanzas?: VisitaFinanzasDto | null;
+  /** true si cerró por superar cantidadHoras (control horario). */
+  cierreAutomatico?: boolean;
+  /** true si cerró porque otra cuidadora hizo relevo. */
+  cierrePorRelevo?: boolean;
+  /** Quién escaneó para relevar (cierra tramo anterior). */
+  prestadorRelevoId?: number | null;
 };
 
 export type PaginatedVisitasDto = {
@@ -251,6 +279,12 @@ export type ObraSocialResumenDto = {
   estado?: boolean;
 };
 
+/** GET /api/v1/localidades — id es el código oficial (string). */
+export type LocalidadDto = {
+  id: string;
+  nombre: string;
+};
+
 export type CreatePacienteBody = {
   nombre: string;
   apellido: string;
@@ -259,6 +293,8 @@ export type CreatePacienteBody = {
   sexo: "M" | "F" | "X";
   telefono: string;
   direccion: string;
+  /** Nombre de la localidad (catálogo GET /api/v1/localidades). */
+  localidad: string;
   obraSocialId: number;
   numeroAfiliado: string;
 };
@@ -276,6 +312,7 @@ export type PacienteListItemDto = {
   sexo: "M" | "F" | "X";
   telefono: string;
   direccion: string;
+  localidad: string;
   obraSocialId?: number;
   obraSocial?: ObraSocialResumenDto | null;
   numeroAfiliado: string;
@@ -287,14 +324,85 @@ export type PacienteDto = PacienteListItemDto & {
   qrDataUrl: string;
 };
 
+export type PacienteServicioPrestadorResumenDto = {
+  id: number;
+  nombre: string;
+  email: string;
+};
+
+/** Ventana de control de cupo (visitas permitidas en el período). */
+export type PeriodoControl = "diario" | "semanal" | "mensual";
+
+export type PrestadorAsignadoResumenDto = {
+  id: number;
+  nombre: string;
+};
+
+/** Cobertura activa en modo relevo (GET /pacientes/qr/:codigoQr). */
+export type CoberturaActivaDto = {
+  visitaId: number;
+  prestadorId: number;
+  prestadorNombre: string;
+  fechaInicio: string;
+};
+
+export type ModoAsignacionServicio = "relevo" | "control_horario" | "visita_unica";
+
+export type CampoAsignacionServicio =
+  | "prestadorId"
+  | "prestadorIds"
+  | "fechaInicio"
+  | "fechaFin"
+  | "coberturaDiariaInicio"
+  | "coberturaDiariaFin"
+  | "periodoControl"
+  | "cantidadPermitida"
+  | "cantidadHoras"
+  | "modalidadCobro"
+  | "estado";
+
+export type CoberturaDiariaReglasDto = {
+  todoElDiaPorDefecto: boolean;
+  formato: "HH:mm";
+  etiquetaInicio: string;
+  etiquetaFin: string;
+  ayuda: string;
+};
+
+export type ReglasAsignacionServicioDto = {
+  modo: ModoAsignacionServicio;
+  camposVisibles: CampoAsignacionServicio[];
+  defaults: Partial<{
+    periodoControl: string;
+    cantidadPermitida: number;
+    modalidadCobro: string;
+    cantidadHoras: number | null;
+  }>;
+  minPrestadores: number;
+  ayudaFormulario: string;
+  ayudaFlujoVisita: string;
+  coberturaDiaria?: CoberturaDiariaReglasDto;
+};
+
 /** Servicio asignado al paciente (GET /pacientes/qr/:codigoQr). */
 export type PacienteServicioAsignadoQrDto = {
   pacienteServicioId: number;
   servicioId: number;
   servicioNombre: string;
+  controlHorario?: boolean;
+  modoRelevo?: boolean;
+  reglasAsignacion?: ReglasAsignacionServicioDto;
+  visitaPendiente?: VisitaPendienteEnAsignacionDto;
+  prestadoresAsignados?: PrestadorAsignadoResumenDto[];
+  coberturaActiva?: CoberturaActivaDto | null;
+  coberturaDiariaInicio?: string | null;
+  coberturaDiariaFin?: string | null;
+  prestadorId?: number;
+  prestador?: PacienteServicioPrestadorResumenDto;
   modalidadCobro: ModalidadCobro;
-  frecuenciaTipo: FrecuenciaTipo;
-  frecuenciaValor: number;
+  periodoControl: PeriodoControl;
+  cantidadPermitida: number;
+  cantidadHoras: number | null;
   estado: PacienteServicioEstado;
   fechaInicio?: string;
   fechaFin?: string | null;
@@ -327,7 +435,82 @@ export type CreateVisitaBody = {
   tiempoMinutos: number;
   observaciones?: string | null;
   fechaFin?: string;
+  /** Obligatorio cuando crea un ADMIN; debe coincidir con la asignación. */
+  prestadorId?: number;
 };
+
+/** POST /api/v1/visitas/iniciar — servicios con control horario. */
+export type IniciarVisitaBody = {
+  pacienteServicioId: number;
+};
+
+/** POST /api/v1/visitas/:id/finalizar — servicios con control horario. */
+export type FinalizarVisitaBody = {
+  observaciones?: string | null;
+};
+
+/** POST /api/v1/visitas/relevar — cobertura continua con relevo por QR. */
+export type RelevarVisitaBody = {
+  pacienteServicioId: number;
+};
+
+export type GestionarTramoAdminAccion = "iniciar" | "finalizar" | "cancelar";
+
+export type GestionarTramoAdminBody =
+  | {
+      accion: "iniciar";
+      pacienteServicioId: number;
+      prestadorId: number;
+      observaciones?: string | null;
+    }
+  | {
+      accion: "finalizar";
+      visitaId: number;
+      observaciones?: string | null;
+    }
+  | {
+      accion: "cancelar";
+      visitaId: number;
+      observaciones?: string | null;
+    };
+
+export type VisitaPendienteResumenDto = {
+  id: number;
+  fechaInicio: string;
+  estado?: VisitaEstado;
+  /** fechaInicio + cantidadHoras (ISO). null si no hay cantidadHoras. */
+  fechaLimite?: string | null;
+};
+
+export type VisitaPendienteCoberturaActivaDto = {
+  visitaId: number;
+  prestadorId: number;
+  fechaInicio: string;
+};
+
+export type VisitaPendienteDto = {
+  tieneVisitaPendiente: boolean;
+  visita: VisitaPendienteResumenDto | null;
+  visitasCerradasAutomaticamente?: number;
+  modoRelevo?: boolean;
+  coberturaActiva?: VisitaPendienteCoberturaActivaDto | null;
+};
+
+export type VisitaPendienteEnAsignacionDto = {
+  id: number;
+  fechaInicio: string;
+  fechaLimite?: string | null;
+};
+
+/** POST /api/v1/visitas/:visitaId/insumos — un ítem o array `items`. */
+export type VisitaInsumoConsumoItem = {
+  insumoId: number;
+  cantidad: number;
+};
+
+export type RegisterVisitaInsumosBody =
+  | { insumoId: number; cantidad: number }
+  | { items: VisitaInsumoConsumoItem[] };
 
 export type UpdateVisitaBody = {
   fechaInicio?: string;
@@ -345,6 +528,18 @@ export type VisitaDetailDto = VisitaListItemDto & {
   fechaInicio?: string;
   fechaFin?: string | null;
   finanzas?: VisitaFinanzasDto | null;
+};
+
+/** POST /api/v1/visitas/relevar — respuesta envuelta. */
+export type RelevarVisitaDto = {
+  huboRelevo: boolean;
+  visitaAnterior: VisitaDetailDto | null;
+  visita: VisitaDetailDto;
+};
+
+export type GestionarTramoAdminResultDto = {
+  accion: GestionarTramoAdminAccion;
+  visita: VisitaDetailDto;
 };
 
 export type PaginatedPacientesDto = {
@@ -410,11 +605,20 @@ export type CreateHistoriaClinicaBody = {
   observaciones?: string | null;
 };
 
+export type UpdateHistoriaClinicaBody = {
+  fechaCreacion?: string;
+  antecedentes?: string | null;
+  diagnosticoInicial?: string | null;
+  medicacion?: string | null;
+  alergias?: string | null;
+  observaciones?: string | null;
+};
+
 export type ModalidadCobro = "por_servicio" | "por_hora" | "por_dia";
 
 export type TipoJornada = "diurno" | "nocturno";
 
-export type TipoDia = "habil" | "sabado" | "domingo" | "feriado";
+export type TipoDia = "habil" | "no_habil";
 
 export type PacienteServicioEstado = "activa" | "suspendida" | "finalizada";
 
@@ -422,6 +626,9 @@ export type ServicioDto = {
   id: number;
   nombre: string;
   estado: boolean;
+  controlHorario?: boolean;
+  modoRelevo?: boolean;
+  reglasAsignacion?: ReglasAsignacionServicioDto;
 };
 
 export type ServicioTarifaDto = {
@@ -440,15 +647,17 @@ export type PacienteServicioTarifaDto = Pick<
   "id" | "modalidadCobro" | "tipoJornada" | "tipoDia" | "valor"
 >;
 
+/** Cupo en la ventana de control (embebido en paciente o GET /disponibilidad). */
 export type PacienteServicioDisponibilidadDto = {
-  periodoControl?: FrecuenciaTipo | string;
-  inicioVentana?: string;
-  finVentana?: string;
-  fechaReferencia?: string;
-  cantidadUtilizada: number;
+  pacienteServicioId?: number;
+  periodoControl: PeriodoControl;
   cantidadPermitida: number;
-  cantidadDisponible?: number;
-  utilizadoYPermitido?: string;
+  cantidadUtilizada: number;
+  cantidadDisponible: number;
+  fechaInicioPeriodo: string;
+  fechaFinPeriodo: string;
+  /** Ej. `"1/3"` — el backend puede enviar `utilizadoYPemitido`. */
+  utilizadoYPemitido: string;
 };
 
 export type ServicioPacienteAsignadoDto = {
@@ -459,8 +668,9 @@ export type ServicioPacienteAsignadoDto = {
   numeroDocumento?: string;
   codigoQr?: string;
   modalidadCobro: ModalidadCobro;
-  frecuenciaTipo: FrecuenciaTipo;
-  frecuenciaValor: number;
+  periodoControl: PeriodoControl;
+  cantidadPermitida: number;
+  cantidadHoras: number | null;
   estado: PacienteServicioEstado;
   fechaInicio?: string;
   fechaFin?: string | null;
@@ -492,12 +702,16 @@ export type CreateServicioBody = {
   nombre: string;
   descripcion?: string | null;
   estado?: boolean;
+  controlHorario?: boolean;
+  modoRelevo?: boolean;
   tarifas: CreateServicioTarifaBody[];
 };
 
 export type UpdateServicioBody = {
   nombre?: string;
   descripcion?: string | null;
+  controlHorario?: boolean;
+  modoRelevo?: boolean;
 };
 
 /** Respuesta de PATCH /servicios/:id (sin tarifas ni pacientes). */
@@ -518,36 +732,49 @@ export type UpdateServicioEstadoBody = {
   estado: boolean;
 };
 
-export type FrecuenciaTipo = "diaria" | "semanal" | "mensual" | "por_horas";
-
 export type PacienteServicioPacienteResumenDto = {
   id: number;
   nombre: string;
   apellido: string;
   numeroDocumento: string;
   codigoQr: string;
+  direccion?: string;
+  localidad?: string;
 };
 
 export type PacienteServicioServicioResumenDto = {
   id: number;
   nombre: string;
   estado: boolean;
+  controlHorario?: boolean;
+  modoRelevo?: boolean;
+  reglasAsignacion?: ReglasAsignacionServicioDto;
 };
 
 export type PacienteServicioDto = {
   id: number;
   pacienteId: number;
   servicioId: number;
+  /** null = cualquier prestador habilitado para el servicio puede atender. */
+  prestadorId: number | null;
+  /** Varios prestadores (servicios con relevamiento). */
+  prestadorIds?: number[];
+  /** Varios prestadores (servicios con relevamiento). */
+  prestadoresAsignados?: PrestadorAsignadoResumenDto[];
+  coberturaDiariaInicio?: string | null;
+  coberturaDiariaFin?: string | null;
   fechaInicio: string;
   fechaFin: string | null;
-  frecuenciaTipo: FrecuenciaTipo;
-  frecuenciaValor: number;
+  periodoControl: PeriodoControl;
+  cantidadPermitida: number;
+  cantidadHoras: number | null;
   modalidadCobro: ModalidadCobro;
   estado: PacienteServicioEstado;
   createdAt: string;
   updatedAt: string;
   paciente: PacienteServicioPacienteResumenDto;
   servicio: PacienteServicioServicioResumenDto;
+  prestador: PacienteServicioPrestadorResumenDto | null;
 };
 
 export type PaginatedPacienteServiciosDto = {
@@ -560,25 +787,49 @@ export type PaginatedPacienteServiciosDto = {
 export type CreatePacienteServicioBody = {
   pacienteId: number;
   servicioId: number;
+  /** Opcional: sin valor, cualquier prestador habilitado puede atender. */
+  prestadorId?: number | null;
+  /** Varios prestadores (servicios con relevamiento). */
+  prestadorIds?: number[];
   fechaInicio: string;
   fechaFin?: string | null;
-  /** Campo nuevo esperado por backend para definir ventana de control. */
-  periodoControl: FrecuenciaTipo;
-  /** Cupo del período (diario/semanal/mensual), mapeado desde frecuenciaValor. */
-  cantidadPermitida: number;
-  /** Compatibilidad temporal con versiones anteriores del backend. */
-  frecuenciaTipo?: FrecuenciaTipo;
-  frecuenciaValor: number;
-  modalidadCobro: ModalidadCobro;
+  /** Solo relevo: "HH:mm" o null (24h). */
+  coberturaDiariaInicio?: string | null;
+  coberturaDiariaFin?: string | null;
+  /** No enviar en modo relevo — el back completa defaults. */
+  periodoControl?: PeriodoControl;
+  /** Visitas permitidas en la ventana de control. */
+  cantidadPermitida?: number;
+  /** Obligatorio cuando `modalidadCobro === "por_hora"`. */
+  cantidadHoras?: number | null;
+  modalidadCobro?: ModalidadCobro;
   estado?: PacienteServicioEstado;
 };
 
-export type PacienteServicioDisponibilidadResponseDto = {
-  pacienteServicioId?: number;
+export type UpdatePacienteServicioBody = {
+  servicioId?: number;
+  prestadorId?: number | null;
+  prestadorIds?: number[];
+  fechaInicio?: string;
+  fechaFin?: string | null;
+  coberturaDiariaInicio?: string | null;
+  coberturaDiariaFin?: string | null;
+  periodoControl?: PeriodoControl;
+  cantidadPermitida?: number;
+  cantidadHoras?: number | null;
   modalidadCobro?: ModalidadCobro;
-  frecuenciaTipo?: FrecuenciaTipo;
-  disponibilidad: PacienteServicioDisponibilidadDto;
+  estado?: PacienteServicioEstado;
 };
+
+/** GET /paciente-servicios/:id/disponibilidad — plano o envuelto en `disponibilidad`. */
+export type PacienteServicioDisponibilidadResponseDto =
+  | PacienteServicioDisponibilidadDto
+  | {
+      pacienteServicioId?: number;
+      modalidadCobro?: ModalidadCobro;
+      periodoControl?: PeriodoControl;
+      disponibilidad?: PacienteServicioDisponibilidadDto;
+    };
 
 export type ReportePeriodo = "diario" | "semanal" | "mensual";
 

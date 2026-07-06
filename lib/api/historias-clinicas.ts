@@ -6,6 +6,7 @@ import type {
   HistoriaClinicaEvolucionDto,
   HistoriaClinicaPacienteResumenDto,
   PaginatedHistoriasClinicasDto,
+  UpdateHistoriaClinicaBody,
 } from "@/lib/api/types";
 
 export type ListHistoriasClinicasOptions = {
@@ -116,6 +117,19 @@ export async function createHistoriaClinicaWithApi(
 ): Promise<HistoriaClinicaDto> {
   const data = await apiFetch<unknown>("/api/v1/historias-clinicas", {
     method: "POST",
+    token,
+    body: JSON.stringify(body),
+  });
+  return normalizeHistoria(data);
+}
+
+export async function updateHistoriaClinicaWithApi(
+  token: string,
+  id: number,
+  body: UpdateHistoriaClinicaBody
+): Promise<HistoriaClinicaDto> {
+  const data = await apiFetch<unknown>(`/api/v1/historias-clinicas/${id}`, {
+    method: "PATCH",
     token,
     body: JSON.stringify(body),
   });

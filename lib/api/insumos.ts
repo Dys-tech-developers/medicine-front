@@ -1,6 +1,8 @@
 import { apiFetch } from "@/lib/api/client";
+import { fetchAllPaginatedItems } from "@/lib/api/list-pagination";
 import type {
   CreateInsumoBody,
+  DeleteInsumosBulkBody,
   InsumoDto,
   InsumoListItemDto,
   PaginatedInsumosDto,
@@ -77,6 +79,16 @@ export async function listInsumosWithApi(
   return normalizeList(data);
 }
 
+/** Inventario completo para exportación o selects (respeta filtros de listado). */
+export async function listInsumosAllWithApi(
+  token: string,
+  options?: Omit<ListInsumosOptions, "page" | "pageSize">
+): Promise<InsumoListItemDto[]> {
+  return fetchAllPaginatedItems((page, pageSize) =>
+    listInsumosWithApi(token, { ...options, page, pageSize })
+  );
+}
+
 export async function getInsumoByIdWithApi(token: string, id: number): Promise<InsumoDto> {
   const data = await apiFetch<InsumoDto>(`/api/v1/insumos/${id}`, {
     method: "GET",
@@ -108,4 +120,22 @@ export async function updateInsumoWithApi(
     body: JSON.stringify(body),
   });
   return normalizeInsumo(data as InsumoListItemDto & Record<string, unknown>);
+}
+
+export async function deleteInsumoWithApi(token: string, id: number): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/insumos/${id}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function deleteInsumosBulkWithApi(
+  token: string,
+  body: DeleteInsumosBulkBody
+): Promise<void> {
+  await apiFetch<unknown>("/api/v1/insumos/bulk", {
+    method: "DELETE",
+    token,
+    body: JSON.stringify(body),
+  });
 }

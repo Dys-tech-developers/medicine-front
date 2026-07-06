@@ -38,54 +38,71 @@ export function VisitFeedSkeleton({ rows = 5 }: { rows?: number }) {
         <li
           key={i}
           className={cn(
-            "flex items-center gap-4 px-5 py-3.5",
+            "flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-5",
             i % 2 === 1 ? "bg-white/55" : "bg-transparent"
           )}
         >
-          <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-4 w-36 max-w-[70%]" />
-            <Skeleton className="h-3 w-52 max-w-full" />
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Skeleton className="size-9 shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-36 max-w-[70%]" />
+              <Skeleton className="h-3 w-52 max-w-full" />
+            </div>
           </div>
-          <Skeleton className="h-6 w-[4.5rem] shrink-0 rounded-full" />
+          <div className="flex items-center justify-between gap-2 pl-12 sm:block sm:shrink-0 sm:pl-0 sm:text-right">
+            <Skeleton className="h-6 w-16 rounded-lg" />
+            <Skeleton className="h-3 w-24" />
+          </div>
         </li>
       ))}
     </ul>
   );
 }
 
-/** Tabla inventario admin: insumo, unidad, cantidad, mínimo, estado. */
+/** Tabla inventario admin: insumo, stock, vencimiento, estado, acciones. */
 export function InsumosStockTableSkeleton({
   rows = 6,
-  cellClassName = "px-5 py-5 first:pl-6 last:pr-6 sm:px-6",
+  cellClassName = "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5",
+  canSelect = false,
 }: {
   rows?: number;
   cellClassName?: string;
+  canSelect?: boolean;
 }) {
   return (
-    <tbody className="divide-y divide-medical-border/60">
+    <tbody>
       {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i}>
+        <tr key={i} className="border-b">
+          {canSelect ? (
+            <td className={cellClassName}>
+              <Skeleton className="size-4 rounded" />
+            </td>
+          ) : null}
           <td className={cellClassName}>
             <div className="flex items-center gap-3">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+              <Skeleton className="size-10 shrink-0 rounded-full" />
               <div className="min-w-0 space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-48" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-28" />
               </div>
             </div>
           </td>
           <td className={cn(cellClassName, "hidden sm:table-cell")}>
-            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-1.5 h-1 w-28 rounded-full" />
           </td>
           <td className={cn(cellClassName, "hidden md:table-cell")}>
-            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="mt-1 h-3 w-24" />
           </td>
           <td className={cn(cellClassName, "hidden lg:table-cell")}>
-            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="mt-1 h-3 w-12" />
           </td>
           <td className={cellClassName}>
-            <Skeleton className="h-6 w-20 rounded-full" />
+            <div className="flex min-h-8 items-center justify-end">
+              <Skeleton className="size-8 rounded-lg" />
+            </div>
           </td>
         </tr>
       ))}
@@ -95,14 +112,48 @@ export function InsumosStockTableSkeleton({
 
 export function StockListSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <ul className="divide-y divide-medical-border px-5 py-2">
+    <ul className="divide-y divide-medical-border/80">
       {Array.from({ length: rows }).map((_, i) => (
-        <li key={i} className="flex items-center justify-between gap-3 py-4">
+        <li
+          key={i}
+          className={cn(
+            "flex items-center gap-3 border-l-2 border-l-medical-border px-4 py-3.5 sm:gap-4 sm:px-5",
+            i % 2 === 1 && "bg-medical-secondary/10"
+          )}
+        >
           <div className="min-w-0 flex-1 space-y-2">
             <Skeleton className="h-4 w-36" />
             <Skeleton className="h-3 w-24" />
           </div>
-          <Skeleton className="h-6 w-14 shrink-0 rounded-full" />
+          <div className="shrink-0 space-y-1.5 text-right">
+            <Skeleton className="ml-auto h-5 w-10" />
+            <Skeleton className="ml-auto h-3 w-14" />
+          </div>
+          <Skeleton className="hidden h-6 w-20 shrink-0 rounded-full sm:block" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Lista de prestadores en el resumen del dashboard admin (mismo layout que PrestadorItem). */
+export function PrestadoresListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <ul className="divide-y divide-medical-border/60 bg-medical-surface/20">
+      {Array.from({ length: rows }).map((_, i) => (
+        <li
+          key={i}
+          className={cn(
+            "flex items-center gap-3 px-4 py-3 sm:px-5",
+            i % 2 === 1 && "bg-medical-secondary/20"
+          )}
+        >
+          <Skeleton className="size-8 shrink-0 rounded-xl" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="hidden h-3 w-44 sm:block" />
+          </div>
+          <Skeleton className="h-6 w-20 shrink-0 rounded-full" />
         </li>
       ))}
     </ul>
@@ -132,22 +183,21 @@ export function PrestadoresTableSkeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
-/** Tabla directorio admin: paciente, documento, contacto, QR, afiliado, historia. */
 /** Tabla directorio admin: paciente, documento, contacto, afiliación, acciones. */
 export function PacientesDirectoryTableSkeleton({
-  rows = 6,
-  cellClassName = "px-4 py-4 first:pl-6 last:pr-5 sm:px-5",
+  rows = 5,
+  cellClassName = "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5",
 }: {
   rows?: number;
   cellClassName?: string;
 }) {
   return (
-    <tbody className="divide-y divide-medical-border/60">
+    <tbody>
       {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i}>
+        <tr key={i} className="border-b">
           <td className={cellClassName}>
             <div className="flex items-center gap-3">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+              <Skeleton className="size-10 shrink-0 rounded-full" />
               <div className="min-w-0 space-y-2">
                 <Skeleton className="h-4 w-36" />
                 <Skeleton className="h-3 w-24" />
@@ -167,12 +217,71 @@ export function PacientesDirectoryTableSkeleton({
             <Skeleton className="mt-1 h-3 w-20" />
           </td>
           <td className={cellClassName}>
-            <div className="flex justify-end gap-1">
-              <Skeleton className="h-7 w-7 rounded-lg" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
+            <div className="flex min-h-8 items-center justify-end">
+              <Skeleton className="h-8 w-24 rounded-lg" />
             </div>
           </td>
+        </tr>
+      ))}
+    </tbody>
+  );
+}
+
+/** Tabla liquidación / finanzas: visita, prestador, montos, acciones. */
+export function ReportesFinanzasTableSkeleton({
+  rows = 6,
+  canEdit = false,
+  cellClassName = "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5",
+}: {
+  rows?: number;
+  canEdit?: boolean;
+  cellClassName?: string;
+}) {
+  return (
+    <tbody>
+      {Array.from({ length: rows }).map((_, i) => (
+        <tr key={i} className="border-b">
+          {canEdit ? (
+            <td className={cellClassName}>
+              <Skeleton className="size-4 rounded" />
+            </td>
+          ) : null}
+          <td className={cellClassName}>
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-1 h-3 w-14" />
+          </td>
+          <td className={cellClassName}>
+            <div className="flex items-center gap-3">
+              <Skeleton className="size-10 shrink-0 rounded-full" />
+              <div className="min-w-0 space-y-2">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </div>
+          </td>
+          <td className={cn(cellClassName, "hidden md:table-cell")}>
+            <Skeleton className="h-4 w-28" />
+          </td>
+          <td className={cn(cellClassName, "hidden lg:table-cell")}>
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mt-1 h-3 w-20" />
+          </td>
+          <td className={cn(cellClassName, "text-right")}>
+            <Skeleton className="ml-auto h-4 w-20" />
+          </td>
+          <td className={cellClassName}>
+            <Skeleton className="h-4 w-16" />
+          </td>
+          <td className={cellClassName}>
+            <Skeleton className="h-4 w-16" />
+          </td>
+          {canEdit ? (
+            <td className={cellClassName}>
+              <div className="flex min-h-8 items-center justify-end">
+                <Skeleton className="size-8 rounded-lg" />
+              </div>
+            </td>
+          ) : null}
         </tr>
       ))}
     </tbody>
@@ -182,19 +291,19 @@ export function PacientesDirectoryTableSkeleton({
 /** Tabla directorio admin: paciente, prestador, fecha, duración, prestación, insumos. */
 export function VisitasDirectoryTableSkeleton({
   rows = 6,
-  cellClassName = "px-4 py-4 first:pl-6 last:pr-5 sm:px-5",
+  cellClassName = "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5",
 }: {
   rows?: number;
   cellClassName?: string;
 }) {
   return (
-    <tbody className="divide-y divide-medical-border/60">
+    <tbody>
       {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i}>
+        <tr key={i} className="border-b">
           {/* Paciente */}
           <td className={cellClassName}>
             <div className="flex items-center gap-3">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+              <Skeleton className="size-9 shrink-0 rounded-full" />
               <div className="min-w-0 space-y-2">
                 <Skeleton className="h-4 w-36" />
                 <Skeleton className="h-3 w-24" />
@@ -217,18 +326,25 @@ export function VisitasDirectoryTableSkeleton({
           <td className={cellClassName}>
             <Skeleton className="h-6 w-20 rounded-lg" />
           </td>
+          {/* Estado */}
+          <td className={cellClassName}>
+            <Skeleton className="h-6 w-24 rounded-md" />
+          </td>
           {/* Prestación */}
           <td className={cn(cellClassName, "hidden lg:table-cell")}>
             <Skeleton className="h-4 w-28" />
-            <Skeleton className="mt-1.5 h-5 w-16 rounded-md" />
           </td>
-          {/* Cobro */}
+          {/* Seguimiento */}
           <td className={cellClassName}>
-            <Skeleton className="ml-auto h-7 w-24 rounded-md" />
+            <div className="flex min-h-8 items-center justify-end">
+              <Skeleton className="h-8 w-24 rounded-md" />
+            </div>
           </td>
           {/* Detalle */}
           <td className={cellClassName}>
-            <Skeleton className="ml-auto h-7 w-7 rounded-lg" />
+            <div className="flex min-h-8 items-center justify-end">
+              <Skeleton className="size-8 rounded-lg" />
+            </div>
           </td>
         </tr>
       ))}
@@ -263,39 +379,48 @@ export function PrestadoresDirectoryCardsSkeleton({ rows = 5 }: { rows?: number 
   );
 }
 
-/** Tabla directorio admin: profesional, doc, fiscal, visitas, pagado, debe, estado, acciones. */
+/** Tabla directorio admin: profesional, doc, fiscal, servicios, visitas, pagado, debe, estado, acciones. */
 export function PrestadoresDirectoryTableSkeleton({
   rows = 6,
-  cellClassName = "px-4 py-4 first:pl-6 last:pr-5 sm:px-5",
+  cellClassName = "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5",
 }: {
   rows?: number;
   cellClassName?: string;
 }) {
   return (
-    <tbody className="divide-y divide-medical-border/60">
+    <tbody>
       {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i}>
+        <tr key={i} className="border-b">
           <td className={cellClassName}>
             <div className="flex items-center gap-3">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+              <Skeleton className="size-9 shrink-0 rounded-full sm:size-10" />
               <div className="min-w-0 space-y-2">
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-3 w-44" />
               </div>
             </div>
           </td>
-          <td className={cn(cellClassName, "hidden md:table-cell")}>
+          <td className={cn(cellClassName, "hidden xl:table-cell")}>
             <div className="space-y-2">
-              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-4 w-24" />
               <Skeleton className="h-3 w-20" />
             </div>
           </td>
-          <td className={cn(cellClassName, "hidden xl:table-cell")}>
+          <td className={cn(cellClassName, "hidden 2xl:table-cell")}>
             <Skeleton className="h-4 w-28" />
-            <Skeleton className="mt-1.5 h-5 w-24 rounded-md" />
+            <Skeleton className="mt-1.5 h-5 w-24 rounded-full" />
           </td>
-          <td className={cn(cellClassName, "hidden sm:table-cell text-right")}>
-            <Skeleton className="ml-auto h-4 w-8" />
+          <td className={cn(cellClassName, "hidden xl:table-cell")}>
+            <div className="flex flex-wrap gap-1.5">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+          </td>
+          <td className={cn(cellClassName, "text-right")}>
+            <div className="ml-auto space-y-1.5">
+              <Skeleton className="ml-auto h-4 w-8" />
+              <Skeleton className="ml-auto h-3 w-14" />
+            </div>
           </td>
           <td className={cn(cellClassName, "text-right")}>
             <Skeleton className="ml-auto h-4 w-20" />
@@ -303,14 +428,17 @@ export function PrestadoresDirectoryTableSkeleton({
           <td className={cn(cellClassName, "text-right")}>
             <Skeleton className="ml-auto h-4 w-20" />
           </td>
-          <td className={cn(cellClassName, "hidden lg:table-cell")}>
-            <div className="flex flex-col gap-1.5">
-              <Skeleton className="h-5 w-16 rounded-md" />
-              <Skeleton className="h-5 w-20 rounded-md" />
+          <td className={cn(cellClassName, "hidden xl:table-cell")}>
+            <div className="flex flex-wrap gap-1.5">
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-20 rounded-full" />
             </div>
           </td>
           <td className={cellClassName}>
-            <Skeleton className="ml-auto h-7 w-14 rounded-lg" />
+            <div className="flex min-h-8 items-center justify-end gap-1">
+              <Skeleton className="size-8 rounded-lg" />
+              <Skeleton className="size-8 rounded-lg" />
+            </div>
           </td>
         </tr>
       ))}
@@ -323,34 +451,33 @@ export function PrestadoresDirectoryTableSkeleton({
 /** Tabla directorio admin: obra social, código, estado, acciones. */
 export function ObrasSocialesDirectoryTableSkeleton({
   rows = 6,
-  cellClassName = "px-4 py-4 first:pl-6 last:pr-5 sm:px-5",
+  cellClassName = "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5",
 }: {
   rows?: number;
   cellClassName?: string;
 }) {
   return (
-    <tbody className="divide-y divide-medical-border/60">
+    <tbody>
       {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i}>
+        <tr key={i} className="border-b">
           <td className={cellClassName}>
             <div className="flex items-center gap-3">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+              <Skeleton className="size-9 shrink-0 rounded-full" />
               <div className="min-w-0 space-y-2">
                 <Skeleton className="h-4 w-36" />
-                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-20 sm:hidden" />
               </div>
             </div>
           </td>
           <td className={cn(cellClassName, "hidden sm:table-cell")}>
             <Skeleton className="h-4 w-24" />
           </td>
-          <td className={cellClassName}>
-            <Skeleton className="h-5 w-10 rounded-full" />
+          <td className={cn(cellClassName, "hidden sm:table-cell")}>
+            <Skeleton className="h-5 w-20 rounded-full" />
           </td>
           <td className={cellClassName}>
-            <div className="flex justify-end gap-1">
-              <Skeleton className="h-7 w-7 rounded-lg" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
+            <div className="flex min-h-9 items-center justify-end">
+              <Skeleton className="size-8 rounded-lg" />
             </div>
           </td>
         </tr>
@@ -360,39 +487,40 @@ export function ObrasSocialesDirectoryTableSkeleton({
 }
 
 export function ServiciosDirectoryTableSkeleton({
-  rows = 6,
-  cellClassName = "px-5 py-5 first:pl-6 last:pr-6 sm:px-6",
+  rows = 5,
+  cellClassName = "px-4 py-3 whitespace-normal first:pl-6 last:pr-6 sm:px-5",
 }: {
   rows?: number;
   cellClassName?: string;
 }) {
   return (
-    <tbody className="divide-y divide-medical-border/60">
+    <tbody>
       {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i}>
+        <tr key={i} className="border-b">
           <td className={cellClassName}>
-            <div className="flex items-start gap-3">
-              <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-56" />
+            <div className="flex items-center gap-3">
+              <Skeleton className="size-9 shrink-0 rounded-full" />
+              <div className="min-w-0 space-y-2">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-24" />
               </div>
             </div>
           </td>
           <td className={cn(cellClassName, "hidden md:table-cell")}>
-            <div className="space-y-2">
-              <Skeleton className="h-14 w-full rounded-xl" />
-              <Skeleton className="h-14 w-4/5 rounded-xl" />
-            </div>
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="mt-1 h-3 w-20" />
           </td>
           <td className={cn(cellClassName, "hidden lg:table-cell")}>
-            <Skeleton className="h-6 w-24 rounded-full" />
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="mt-1 h-3 w-36" />
+          </td>
+          <td className={cn(cellClassName, "hidden sm:table-cell")}>
+            <Skeleton className="h-5 w-16 rounded-full" />
           </td>
           <td className={cellClassName}>
-            <Skeleton className="h-6 w-11 rounded-full" />
-          </td>
-          <td className={cellClassName}>
-            <Skeleton className="h-8 w-8 rounded-lg" />
+            <div className="flex min-h-8 items-center justify-end">
+              <Skeleton className="size-8 rounded-lg" />
+            </div>
           </td>
         </tr>
       ))}

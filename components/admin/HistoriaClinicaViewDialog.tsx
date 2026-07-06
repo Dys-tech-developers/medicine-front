@@ -8,6 +8,7 @@ import {
   ClipboardPlus,
   FileText,
   Loader2,
+  Pencil,
   Pill,
   Stethoscope,
   X,
@@ -26,6 +27,7 @@ import { getPacienteNombre } from "@/lib/pacientes-display";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CreateEvolucionClinicaDialog } from "@/components/admin/CreateEvolucionClinicaDialog";
+import { EditHistoriaClinicaDialog } from "@/components/admin/EditHistoriaClinicaDialog";
 import { Badge } from "@/components/ui/badge";
 
 type HistoriaClinicaViewDialogProps = {
@@ -33,6 +35,8 @@ type HistoriaClinicaViewDialogProps = {
   paciente: PacienteListItemDto | null;
   accessToken: string | null;
   onClose: () => void;
+  /** Si no hay historia (404), permite abrir el alta desde este diálogo. */
+  onCreateHistoria?: () => void;
 };
 
 function SectionTitle({
@@ -135,25 +139,42 @@ export function HistoriaClinicaViewDialog({
   paciente,
   accessToken,
   onClose,
+  onCreateHistoria,
 }: HistoriaClinicaViewDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notFound, setNotFound] = useState(false);
   const [historia, setHistoria] = useState<HistoriaClinicaDto | null>(null);
   const [evolucionOpen, setEvolucionOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const load = useCallback(async () => {
-    if (!paciente || !accessToken) return;
+    if (!paciente) return;
+    if (!accessToken) {
+      setLoading(false);
+      setNotFound(false);
+      setError("No hay sesión activa para cargar la historia clínica.");
+      setHistoria(null);
+      return;
+    }
     setLoading(true);
     setError("");
+    setNotFound(false);
     try {
       const data = await getHistoriaClinicaByPacienteIdWithApi(accessToken, paciente.id);
       setHistoria(data);
     } catch (err) {
-      const msg =
-        err instanceof ApiError
-          ? getApiErrorMessages(err).join(" ")
-          : "No se pudo cargar la historia clínica.";
-      setError(msg);
+      if (err instanceof ApiError && err.status === 404) {
+        setNotFound(true);
+        setError("");
+      } else {
+        const msg =
+          err instanceof ApiError
+            ? getApiErrorMessages(err).join(" ")
+            : "No se pudo cargar la historia clínica.";
+        setError(msg);
+        setNotFound(false);
+      }
       setHistoria(null);
     } finally {
       setLoading(false);
@@ -161,22 +182,28 @@ export function HistoriaClinicaViewDialog({
   }, [accessToken, paciente]);
 
   useEffect(() => {
-    if (open && paciente) void load();
+    if (open && paciente) {
+      setLoading(true);
+      void load();
+    }
     if (!open) {
       setHistoria(null);
       setError("");
+      setNotFound(false);
       setEvolucionOpen(false);
+      setEditOpen(false);
+      setLoading(false);
     }
   }, [open, paciente, load]);
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !loading && !evolucionOpen) onClose();
+      if (e.key === "Escape" && !loading && !evolucionOpen && !editOpen) onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, loading, evolucionOpen, onClose]);
+  }, [open, loading, evolucionOpen, editOpen, onClose]);
 
   const evoluciones = useMemo(
     () => (historia ? sortEvolucionesDesc(historia.evoluciones) : []),
@@ -253,6 +280,32 @@ export function HistoriaClinicaViewDialog({
                 <Loader2 className="size-10 animate-spin text-medical-primary" />
                 <p className="text-sm text-medical-mutedText">Cargando historia clínica…</p>
               </div>
+            ) : notFound ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-medical-border bg-medical-surface/30 px-4 py-10 text-center">
+                <FileText className="size-10 text-medical-mutedText/50" aria-hidden />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-medical-text">
+                    Sin historia clínica registrada
+                  </p>
+                  <p className="max-w-xs text-xs leading-relaxed text-medical-mutedText">
+                    Este paciente todavía no tiene ficha médica. Podés crearla para registrar
+                    antecedentes, diagnóstico inicial y evoluciones.
+                  </p>
+                </div>
+                {onCreateHistoria ? (
+                  <Button
+                    type="button"
+                    className="mt-1 cursor-pointer gap-2 bg-medical-primary text-white hover:bg-medical-primaryDark"
+                    onClick={() => {
+                      onClose();
+                      onCreateHistoria();
+                    }}
+                  >
+                    <ClipboardPlus className="size-4" />
+                    Crear historia clínica
+                  </Button>
+                ) : null}
+              </div>
             ) : error ? (
               <div className="space-y-4 py-4">
                 <p className="flex gap-2 rounded-lg border border-medical-danger/30 bg-medical-danger/10 px-4 py-3 text-sm text-medical-danger">
@@ -266,7 +319,23 @@ export function HistoriaClinicaViewDialog({
             ) : historia ? (
               <div className="space-y-6">
                 <section>
-                  <SectionTitle icon={Stethoscope}>Datos iniciales</SectionTitle>
+                  <SectionTitle
+                    icon={Stethoscope}
+                    trailing={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 cursor-pointer gap-1.5 border-medical-border bg-white text-xs text-medical-text hover:bg-medical-surface"
+                        onClick={() => setEditOpen(true)}
+                      >
+                        <Pencil className="size-3.5" />
+                        Editar
+                      </Button>
+                    }
+                  >
+                    Datos iniciales
+                  </SectionTitle>
                   <InfoCard>
                     <InfoRow label="Antecedentes" multiline>
                       {formatHistoriaField(historia.antecedentes)}
@@ -326,7 +395,7 @@ export function HistoriaClinicaViewDialog({
             <div className="shrink-0 space-y-2 border-t border-medical-border bg-medical-surface/80 px-5 py-4 sm:px-6">
               <Button
                 type="button"
-                className="w-full cursor-pointer gap-2"
+                className="w-full cursor-pointer gap-2 bg-medical-primary text-white hover:bg-medical-primaryDark"
                 onClick={() => setEvolucionOpen(true)}
               >
                 <ClipboardPlus className="size-4" />
@@ -336,7 +405,7 @@ export function HistoriaClinicaViewDialog({
                 Cerrar
               </Button>
             </div>
-          ) : !loading ? (
+          ) : !loading && (error || notFound) ? (
             <div className="border-t border-medical-border bg-medical-surface/80 px-5 py-4 sm:px-6">
               <Button type="button" variant="outline" className="w-full cursor-pointer" onClick={onClose}>
                 Cerrar
@@ -353,6 +422,16 @@ export function HistoriaClinicaViewDialog({
         accessToken={accessToken}
         onClose={() => setEvolucionOpen(false)}
         onSuccess={() => void load()}
+      />
+
+      <EditHistoriaClinicaDialog
+        open={editOpen}
+        historia={historia}
+        accessToken={accessToken}
+        onClose={() => setEditOpen(false)}
+        onUpdated={(updated) => {
+          setHistoria(updated);
+        }}
       />
     </>,
     document.body

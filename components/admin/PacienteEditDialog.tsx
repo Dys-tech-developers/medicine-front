@@ -6,10 +6,12 @@ import { createPortal } from "react-dom";
 import { Building2, Loader2, Pencil, X } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
+import { listLocalidadesWithApi } from "@/lib/api/localidades";
 import { listObrasSocialesWithApi } from "@/lib/api/obras-sociales";
 import { updatePacienteWithApi } from "@/lib/api/pacientes";
 import type {
   CreatePacienteBody,
+  LocalidadDto,
   ObraSocialListItemDto,
   PacienteListItemDto,
 } from "@/lib/api/types";
@@ -27,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 const inputClass =
   "h-11 w-full rounded-xl border border-medical-border bg-medical-surface/80 px-3.5 text-sm text-medical-text outline-none transition placeholder:text-medical-mutedText/60 focus:border-medical-primary focus:bg-medical-card focus:ring-4 focus:ring-medical-primary/12 disabled:cursor-not-allowed disabled:opacity-60";
@@ -39,6 +42,7 @@ type FormState = {
   sexo: "" | CreatePacienteBody["sexo"];
   telefono: string;
   direccion: string;
+  localidad: string;
   obraSocialId: string;
   numeroAfiliado: string;
 };
@@ -58,6 +62,7 @@ function pacienteToForm(paciente: PacienteListItemDto): FormState {
     sexo: paciente.sexo,
     telefono: paciente.telefono,
     direccion: paciente.direccion,
+    localidad: paciente.localidad?.trim() ?? "",
     obraSocialId: paciente.obraSocialId != null ? String(paciente.obraSocialId) : "",
     numeroAfiliado: paciente.numeroAfiliado,
   };
@@ -74,6 +79,7 @@ function validateForm(values: FormState): string | null {
   if (!values.sexo) return "Seleccioná el sexo.";
   if (!values.telefono.trim()) return "El teléfono es obligatorio.";
   if (!values.direccion.trim()) return "La dirección es obligatoria.";
+  if (!values.localidad) return "Seleccioná la localidad.";
   if (!values.obraSocialId) return "Seleccioná la obra social.";
   if (!values.numeroAfiliado.trim()) return "El número de afiliado es obligatorio.";
   return null;
@@ -88,6 +94,7 @@ function toPayload(values: FormState): CreatePacienteBody {
     sexo: values.sexo as CreatePacienteBody["sexo"],
     telefono: values.telefono.trim(),
     direccion: values.direccion.trim(),
+    localidad: values.localidad,
     obraSocialId: Number(values.obraSocialId),
     numeroAfiliado: values.numeroAfiliado.trim(),
   };
@@ -114,11 +121,36 @@ export function PacienteEditDialog({
   const [obrasSociales, setObrasSociales] = useState<ObraSocialListItemDto[]>([]);
   const [obrasLoading, setObrasLoading] = useState(true);
   const [obrasError, setObrasError] = useState("");
+  const [localidades, setLocalidades] = useState<LocalidadDto[]>([]);
+  const [localidadesLoading, setLocalidadesLoading] = useState(true);
+  const [localidadesError, setLocalidadesError] = useState("");
 
   useEffect(() => {
     if (paciente) setValues(pacienteToForm(paciente));
     setError("");
   }, [paciente]);
+
+  useEffect(() => {
+    if (!open || !accessToken) return;
+    let cancelled = false;
+    setLocalidadesLoading(true);
+    setLocalidadesError("");
+
+    void listLocalidadesWithApi(accessToken)
+      .then((data) => {
+        if (!cancelled) setLocalidades(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLocalidadesError("No se pudieron cargar las localidades.");
+      })
+      .finally(() => {
+        if (!cancelled) setLocalidadesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, accessToken]);
 
   useEffect(() => {
     if (!open || !accessToken) return;
@@ -152,7 +184,10 @@ export function PacienteEditDialog({
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !loading) onClose();
+      if (e.key !== "Escape" || loading) return;
+      // Si hay un popover abierto (ej. buscador de localidad), Escape lo cierra a él, no al diálogo.
+      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
+      onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -297,7 +332,7 @@ export function PacienteEditDialog({
             <div className="space-y-1.5">
               <Label htmlFor="edit-paciente-sexo">Sexo</Label>
               <Select
-                value={values.sexo || undefined}
+                value={values.sexo}
                 onValueChange={(v) =>
                   setValues((prev) => prev && { ...prev, sexo: v as CreatePacienteBody["sexo"] })
                 }
@@ -336,6 +371,28 @@ export function PacienteEditDialog({
                 required
               />
             </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="edit-paciente-localidad">Localidad</Label>
+              <SearchableSelect
+                id="edit-paciente-localidad"
+                options={localidades.map((l) => ({
+                  value: l.nombre,
+                  label: l.nombre,
+                }))}
+                value={values.localidad}
+                onChange={(v) =>
+                  setValues((prev) => prev && { ...prev, localidad: v })
+                }
+                loading={localidadesLoading}
+                disabled={loading || !!localidadesError}
+                placeholder="Seleccioná una localidad"
+                searchPlaceholder="Buscar localidad…"
+                emptyMessage="No se encontró ninguna localidad"
+              />
+              {localidadesError ? (
+                <p className="text-sm text-medical-danger">{localidadesError}</p>
+              ) : null}
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-paciente-obra">Obra social</Label>
               {obrasLoading ? (
@@ -352,7 +409,7 @@ export function PacienteEditDialog({
                 </p>
               ) : (
                 <Select
-                  value={values.obraSocialId || undefined}
+                  value={values.obraSocialId}
                   onValueChange={(v) => setValues((prev) => prev && { ...prev, obraSocialId: v })}
                   disabled={loading}
                 >

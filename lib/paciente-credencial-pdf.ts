@@ -32,53 +32,46 @@ function findCredencialCard(root: HTMLElement): HTMLElement | null {
   return root.querySelector<HTMLElement>("[data-credencial-card]");
 }
 
-/** Evita que html2canvas copie colores lab/oklch de estilos computados (Tailwind v4). */
-function syncInlineStylesOnly(source: Element, target: Element): void {
-  if (target instanceof HTMLElement && source instanceof HTMLElement) {
-    target.removeAttribute("class");
-    target.style.cssText = "";
-    const inline = source.getAttribute("style");
-    if (inline) target.setAttribute("style", inline);
-  }
-
-  const sourceKids = Array.from(source.children);
-  const targetKids = Array.from(target.children);
-  sourceKids.forEach((child, index) => {
-    const targetChild = targetKids[index];
-    if (targetChild) syncInlineStylesOnly(child, targetChild);
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("No se pudo cargar la imagen de la credencial."));
+    img.src = src;
   });
 }
 
+/**
+ * Captura la credencial a PNG con html-to-image (SVG foreignObject), que respeta
+ * el layout/tipografía del navegador y evita el corrimiento de texto de html2canvas.
+ */
 async function captureCardToPdf(card: HTMLElement, codigoQr: string): Promise<void> {
   await waitForImages(card);
 
-  const { default: html2canvas } = await import("html2canvas");
+  const { toPng } = await import("html-to-image");
   const { default: jsPDF } = await import("jspdf");
 
-  const canvas = await html2canvas(card, {
-    scale: 3,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: "#ffffff",
-    logging: false,
-    onclone: (clonedDoc, clonedRoot) => {
-      clonedDoc
-        .querySelectorAll('link[rel="stylesheet"], style')
-        .forEach((node) => node.remove());
+  const width = card.offsetWidth;
+  const height = card.offsetHeight;
 
-      const clonedCard =
-        clonedRoot.querySelector<HTMLElement>("[data-credencial-card]") ?? clonedRoot;
-      syncInlineStylesOnly(card, clonedCard);
+  const dataUrl = await toPng(card, {
+    pixelRatio: 3,
+    width,
+    height,
+    backgroundColor: "#ffffff",
+    cacheBust: true,
+    style: {
+      margin: "0",
     },
   });
 
-  if (canvas.width < 20 || canvas.height < 20) {
+  const img = await loadImage(dataUrl);
+  if (img.naturalWidth < 20 || img.naturalHeight < 20) {
     throw new Error(
       "La captura de la credencial salió vacía. Probá de nuevo o recargá la página."
     );
   }
 
-  const imgData = canvas.toDataURL("image/png");
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -88,17 +81,17 @@ async function captureCardToPdf(card: HTMLElement, codigoQr: string): Promise<vo
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const cardW = 90;
-  const cardH = (canvas.height * cardW) / canvas.width;
+  const cardH = (img.naturalHeight * cardW) / img.naturalWidth;
   const x = (pageW - cardW) / 2;
   const y = (pageH - cardH) / 2;
 
-  pdf.addImage(imgData, "PNG", x, y, cardW, cardH);
+  pdf.addImage(dataUrl, "PNG", x, y, cardW, cardH);
   pdf.save(`credencial-${codigoQr}.pdf`);
 }
 
 /**
  * Genera un PDF con la credencial del paciente.
- * Renderiza en un iframe aislado (sin Tailwind) para evitar errores lab/oklch en html2canvas.
+ * Renderiza en un iframe aislado (sin Tailwind) para evitar errores lab/oklch al capturar.
  */
 export async function downloadPacienteCredencialPdf(
   paciente: PacienteDto
@@ -108,7 +101,7 @@ export async function downloadPacienteCredencialPdf(
 
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  // No usar visibility:hidden: html2canvas no pinta el contenido completo.
+  // No usar visibility:hidden: la captura no pinta el contenido completo.
   iframe.style.cssText =
     "position:fixed;left:-10000px;top:0;width:420px;height:820px;border:none;opacity:0;pointer-events:none;z-index:-1;";
 
@@ -139,6 +132,9 @@ export async function downloadPacienteCredencialPdf(
     if (!card) {
       throw new Error("No se pudo generar la credencial.");
     }
+
+    // Pequeña espera extra para asegurar fuentes/layout estables.
+    await nextFrame();
 
     await captureCardToPdf(card, paciente.codigoQr);
   } finally {

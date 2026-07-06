@@ -74,9 +74,33 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new ApiError(message, "NETWORK_ERROR", 0);
   }
 
+  const text = await response.text();
+  const isDeleteServicio =
+    rest.method === "DELETE" && /\/api\/v1\/servicios\/\d+$/.test(path);
+
+  if (isDeleteServicio) {
+    console.log("[deleteServicio] respuesta del backend", {
+      status: response.status,
+      statusText: response.statusText,
+      contentType: response.headers.get("content-type"),
+      body: text.length > 0 ? text : "(sin cuerpo — típico en 204 No Content)",
+    });
+  }
+
+  if (response.status === 204 || (response.ok && !text.trim())) {
+    if (!response.ok) {
+      throw new ApiError(
+        `Error del servidor (${response.status}).`,
+        "HTTP_ERROR",
+        response.status
+      );
+    }
+    return undefined as T;
+  }
+
   let payload: ApiResponse<T> | null = null;
   try {
-    payload = (await response.json()) as ApiResponse<T>;
+    payload = JSON.parse(text) as ApiResponse<T>;
   } catch {
     const ngrokHint = isNgrokBackend()
       ? " Ngrok puede estar devolviendo HTML en lugar de JSON (revisá NEXT_PUBLIC_API_URL y el header ngrok-skip-browser-warning)."

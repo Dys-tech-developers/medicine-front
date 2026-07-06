@@ -16,9 +16,15 @@ import {
 import Link from "next/link";
 import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
+import { listLocalidadesWithApi } from "@/lib/api/localidades";
 import { listObrasSocialesWithApi } from "@/lib/api/obras-sociales";
 import { createPacienteWithApi } from "@/lib/api/pacientes";
-import type { CreatePacienteBody, ObraSocialListItemDto, PacienteDto } from "@/lib/api/types";
+import type {
+  CreatePacienteBody,
+  LocalidadDto,
+  ObraSocialListItemDto,
+  PacienteDto,
+} from "@/lib/api/types";
 import {
   DEFAULT_MIN_LOADING_MS,
   delayRemaining,
@@ -31,20 +37,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
 const inputClass =
   "h-11 w-full rounded-xl border border-medical-border bg-medical-surface/80 px-3.5 text-sm text-medical-text outline-none transition placeholder:text-medical-mutedText/60 focus:border-medical-primary focus:bg-medical-card focus:ring-4 focus:ring-medical-primary/12 disabled:cursor-not-allowed disabled:opacity-60";
 
+const SIN_SEXO_VALUE = "__sin_sexo__";
+const SIN_OBRA_SOCIAL_VALUE = "__sin_obra_social__";
+
 type FormState = {
   nombre: string;
   apellido: string;
   numeroDocumento: string;
   fechaNacimiento: string;
-  sexo: "" | CreatePacienteBody["sexo"];
+  sexo: typeof SIN_SEXO_VALUE | CreatePacienteBody["sexo"];
   telefono: string;
   direccion: string;
+  localidad: string;
   obraSocialId: string;
   numeroAfiliado: string;
 };
@@ -54,10 +65,11 @@ const INITIAL: FormState = {
   apellido: "",
   numeroDocumento: "",
   fechaNacimiento: "",
-  sexo: "",
+  sexo: SIN_SEXO_VALUE,
   telefono: "",
   direccion: "",
-  obraSocialId: "",
+  localidad: "",
+  obraSocialId: SIN_OBRA_SOCIAL_VALUE,
   numeroAfiliado: "",
 };
 
@@ -69,10 +81,13 @@ function validateForm(values: FormState): string | null {
   const birth = new Date(`${values.fechaNacimiento}T12:00:00`);
   if (Number.isNaN(birth.getTime())) return "La fecha de nacimiento no es válida.";
   if (birth > new Date()) return "La fecha de nacimiento no puede ser futura.";
-  if (!values.sexo) return "Seleccioná el sexo.";
+  if (!values.sexo || values.sexo === SIN_SEXO_VALUE) return "Seleccioná el sexo.";
   if (!values.telefono.trim()) return "El teléfono es obligatorio.";
   if (!values.direccion.trim()) return "La dirección es obligatoria.";
-  if (!values.obraSocialId) return "Seleccioná la obra social.";
+  if (!values.localidad) return "Seleccioná la localidad.";
+  if (!values.obraSocialId || values.obraSocialId === SIN_OBRA_SOCIAL_VALUE) {
+    return "Seleccioná la obra social.";
+  }
   if (!values.numeroAfiliado.trim()) return "El número de afiliado es obligatorio.";
   return null;
 }
@@ -86,6 +101,7 @@ function toPayload(values: FormState): CreatePacienteBody {
     sexo: values.sexo as CreatePacienteBody["sexo"],
     telefono: values.telefono.trim(),
     direccion: values.direccion.trim(),
+    localidad: values.localidad,
     obraSocialId: Number(values.obraSocialId),
     numeroAfiliado: values.numeroAfiliado.trim(),
   };
@@ -171,10 +187,9 @@ function ObraSocialSelect({
   }
   return (
     <Select
-      value={value || undefined}
+      value={value}
       onValueChange={onChange}
       disabled={disabled}
-     
     >
       <SelectTrigger id="paciente-obra-social" className={inputClass}>
         <SelectValue placeholder="Seleccioná una obra social" />
@@ -250,6 +265,33 @@ export function CreatePacienteForm({
   const [obrasSociales, setObrasSociales] = useState<ObraSocialListItemDto[]>([]);
   const [obrasLoading, setObrasLoading] = useState(true);
   const [obrasError, setObrasError] = useState("");
+  const [localidades, setLocalidades] = useState<LocalidadDto[]>([]);
+  const [localidadesLoading, setLocalidadesLoading] = useState(true);
+  const [localidadesError, setLocalidadesError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLocalidadesLoading(true);
+    setLocalidadesError("");
+
+    void listLocalidadesWithApi(accessToken)
+      .then((data) => {
+        if (cancelled) return;
+        setLocalidades(data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLocalidades([]);
+        setLocalidadesError("No se pudieron cargar las localidades.");
+      })
+      .finally(() => {
+        if (!cancelled) setLocalidadesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -433,7 +475,7 @@ export function CreatePacienteForm({
                 </Field>
                 <Field label="Sexo" htmlFor="paciente-sexo" required className="lg:max-w-xs">
                   <Select
-                    value={values.sexo || undefined}
+                    value={values.sexo}
                     onValueChange={(v) => {
                       setValues((prev) => ({ ...prev, sexo: v as CreatePacienteBody["sexo"] }));
                       setErrorMessages([]);
@@ -522,6 +564,30 @@ export function CreatePacienteForm({
                       disabled={loading}
                     />
                   </div>
+                </Field>
+                <Field
+                  label="Localidad"
+                  htmlFor="paciente-localidad"
+                  required
+                  hint={localidadesError || undefined}
+                >
+                  <SearchableSelect
+                    id="paciente-localidad"
+                    options={localidades.map((l) => ({
+                      value: l.nombre,
+                      label: l.nombre,
+                    }))}
+                    value={values.localidad}
+                    onChange={(v) => {
+                      setValues((prev) => ({ ...prev, localidad: v }));
+                      setErrorMessages([]);
+                    }}
+                    loading={localidadesLoading}
+                    disabled={loading || !!localidadesError}
+                    placeholder="Seleccioná una localidad"
+                    searchPlaceholder="Buscar localidad…"
+                    emptyMessage="No se encontró ninguna localidad"
+                  />
                 </Field>
               </div>
             </FormSection>

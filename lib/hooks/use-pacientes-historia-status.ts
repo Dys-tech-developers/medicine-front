@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { getHistoriaClinicaByPacienteIdWithApi } from "@/lib/api/historias-clinicas";
 
+export type PacienteHistoriaStatus = "yes" | "no" | "error";
+
 /**
  * Indica qué pacientes de la página actual tienen historia clínica (GET por pacienteId).
  */
@@ -13,14 +15,14 @@ export function usePacientesHistoriaStatus(
   refreshNonce = 0
 ) {
   const idsKey = useMemo(() => pacienteIds.join(","), [pacienteIds]);
-  const [hasHistoriaByPacienteId, setHasHistoriaByPacienteId] = useState<
-    Record<number, boolean>
+  const [statusByPacienteId, setStatusByPacienteId] = useState<
+    Record<number, PacienteHistoriaStatus>
   >({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!accessToken || pacienteIds.length === 0) {
-      setHasHistoriaByPacienteId({});
+      setStatusByPacienteId({});
       setLoading(false);
       return;
     }
@@ -32,17 +34,17 @@ export function usePacientesHistoriaStatus(
         pacienteIds.map(async (id) => {
           try {
             await getHistoriaClinicaByPacienteIdWithApi(accessToken, id);
-            return [id, true] as const;
+            return [id, "yes"] as const;
           } catch (err) {
             if (err instanceof ApiError && err.status === 404) {
-              return [id, false] as const;
+              return [id, "no"] as const;
             }
-            return [id, false] as const;
+            return [id, "error"] as const;
           }
         })
       );
       if (!cancelled) {
-        setHasHistoriaByPacienteId(Object.fromEntries(entries));
+        setStatusByPacienteId(Object.fromEntries(entries));
         setLoading(false);
       }
     })();
@@ -52,7 +54,10 @@ export function usePacientesHistoriaStatus(
     };
   }, [accessToken, idsKey, refreshNonce]);
 
-  const hasHistoria = (pacienteId: number) => hasHistoriaByPacienteId[pacienteId] === true;
+  const getHistoriaStatus = (pacienteId: number): PacienteHistoriaStatus | undefined =>
+    statusByPacienteId[pacienteId];
 
-  return { hasHistoria, loading };
+  const hasHistoria = (pacienteId: number) => statusByPacienteId[pacienteId] === "yes";
+
+  return { hasHistoria, getHistoriaStatus, loading };
 }

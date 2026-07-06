@@ -1,5 +1,10 @@
 import { apiFetch } from "@/lib/api/client";
 import { fetchAllPaginatedItems } from "@/lib/api/list-pagination";
+import {
+  normalizePeriodoControlFromRow,
+  resolveCantidadHorasFromRow,
+  resolveCantidadPermitidaFromRow,
+} from "@/lib/paciente-servicio-display";
 import type {
   CreateServicioBody,
   CreateServicioTarifaBody,
@@ -14,8 +19,9 @@ import type {
   UpdateServicioBody,
   UpdateServicioEstadoBody,
   UpdateServicioTarifaBody,
-  FrecuenciaTipo,
 } from "@/lib/api/types";
+import { normalizeTipoDia } from "@/lib/servicios-tarifas-labels";
+import { normalizeReglasAsignacion } from "@/lib/reglas-asignacion";
 
 function normalizeTarifa(
   row: Partial<ServicioTarifaDto> & Record<string, unknown>
@@ -25,7 +31,7 @@ function normalizeTarifa(
     servicioId: row.servicioId != null ? Number(row.servicioId) : undefined,
     modalidadCobro: (row.modalidadCobro ?? "por_hora") as ModalidadCobro,
     tipoJornada: (row.tipoJornada ?? "diurno") as ServicioTarifaDto["tipoJornada"],
-    tipoDia: (row.tipoDia ?? "habil") as ServicioTarifaDto["tipoDia"],
+    tipoDia: normalizeTipoDia(String(row.tipoDia ?? row.tipo_dia ?? "habil")),
     valor: String(row.valor ?? ""),
     createdAt: row.createdAt != null ? String(row.createdAt) : undefined,
   };
@@ -49,6 +55,8 @@ function normalizePacienteAsignado(
       })
     : [];
 
+  const modalidadCobro = (row.modalidadCobro ?? "por_hora") as ModalidadCobro;
+
   return {
     pacienteServicioId: Number(row.pacienteServicioId),
     pacienteId: Number(row.pacienteId),
@@ -57,9 +65,10 @@ function normalizePacienteAsignado(
     numeroDocumento:
       row.numeroDocumento != null ? String(row.numeroDocumento) : undefined,
     codigoQr: row.codigoQr != null ? String(row.codigoQr) : undefined,
-    modalidadCobro: (row.modalidadCobro ?? "por_hora") as ModalidadCobro,
-    frecuenciaTipo: (row.frecuenciaTipo ?? "semanal") as FrecuenciaTipo,
-    frecuenciaValor: Number(row.frecuenciaValor ?? 1),
+    modalidadCobro,
+    periodoControl: normalizePeriodoControlFromRow(row),
+    cantidadPermitida: resolveCantidadPermitidaFromRow(row),
+    cantidadHoras: resolveCantidadHorasFromRow(row, modalidadCobro),
     estado: (row.estado ?? "activa") as PacienteServicioEstado,
     fechaInicio: row.fechaInicio != null ? String(row.fechaInicio) : undefined,
     fechaFin: row.fechaFin != null ? String(row.fechaFin) : null,
@@ -70,10 +79,27 @@ function normalizePacienteAsignado(
 function normalizeServicioConTarifas(
   item: Partial<ServicioConTarifasDto> & Pick<ServicioConTarifasDto, "id" | "nombre">
 ): ServicioConTarifasDto {
+  const modoRelevo = Boolean(
+    item.modoRelevo ?? (item as Record<string, unknown>).modo_relevo ?? false
+  );
+  const controlHorario = Boolean(
+    item.controlHorario ??
+      (item as Record<string, unknown>).control_horario ??
+      false
+  );
+  const reglasAsignacion = normalizeReglasAsignacion(
+    (item as Record<string, unknown>).reglasAsignacion ??
+      (item as Record<string, unknown>).reglas_asignacion,
+    { modoRelevo, controlHorario }
+  );
+
   return {
     id: item.id,
     nombre: item.nombre,
     estado: item.estado ?? true,
+    controlHorario,
+    modoRelevo,
+    reglasAsignacion,
     descripcion: item.descripcion ?? null,
     createdAt: item.createdAt ?? "",
     tarifas: (item.tarifas ?? []).map((t) =>
@@ -166,6 +192,12 @@ export async function updateServicioWithApi(
     id: data.id,
     nombre: data.nombre,
     estado: data.estado ?? true,
+    controlHorario: Boolean(
+      data.controlHorario ?? (data as Record<string, unknown>).control_horario ?? false
+    ),
+    modoRelevo: Boolean(
+      data.modoRelevo ?? (data as Record<string, unknown>).modo_relevo ?? false
+    ),
   };
 }
 

@@ -5,9 +5,11 @@ import { createPortal } from "react-dom";
 import {
   Building2,
   ClipboardList,
+  Layers,
   Mail,
   Stethoscope,
   User,
+  Wallet,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,7 @@ import type { PrestadorListItemDto } from "@/lib/api/types";
 import {
   formatPrestadorCbu,
   formatPrestadorDateTime,
+  formatPrestadorServiciosList,
   formatRegimenIva,
 } from "@/lib/prestadores-display";
 import { MEDICAL_UI, estadoActivoBadgeClass, medicalNeutralBadge } from "@/lib/medical-ui-classes";
@@ -76,12 +79,16 @@ type PrestadorDetailDialogProps = {
   open: boolean;
   prestador: PrestadorListItemDto | null;
   onClose: () => void;
+  onEditServicios?: (prestador: PrestadorListItemDto) => void;
+  onOpenCuenta?: (prestador: PrestadorListItemDto) => void;
 };
 
 export function PrestadorDetailDialog({
   open,
   prestador,
   onClose,
+  onEditServicios,
+  onOpenCuenta,
 }: PrestadorDetailDialogProps) {
   useEffect(() => {
     if (!open) return;
@@ -196,6 +203,22 @@ export function PrestadorDetailDialog({
             </InfoCard>
           </section>
 
+          {/* Servicios habilitados */}
+          <section>
+            <SectionTitle icon={Layers}>Servicios habilitados</SectionTitle>
+            <InfoCard>
+              <div className="px-4 py-3">
+                <p className="text-sm text-medical-text">
+                  {formatPrestadorServiciosList(prestador.servicios)}
+                </p>
+                <p className="mt-2 text-xs text-medical-mutedText">
+                  Desde «Acciones» en la tabla o el botón de abajo podés agregar o quitar
+                  prestaciones habilitadas.
+                </p>
+              </div>
+            </InfoCard>
+          </section>
+
           {/* Identidad profesional */}
           <section>
             <SectionTitle icon={Stethoscope}>Identidad profesional</SectionTitle>
@@ -239,7 +262,28 @@ export function PrestadorDetailDialog({
         </div>
 
         {/* Footer */}
-        <div className={cn("shrink-0 px-5 py-3 sm:px-6", MEDICAL_UI.dialogFooter)}>
+        <div className={cn("shrink-0 space-y-2 px-5 py-3 sm:px-6", MEDICAL_UI.dialogFooter)}>
+          {onEditServicios ? (
+            <Button
+              type="button"
+              className="w-full cursor-pointer bg-medical-primary text-white hover:bg-medical-primaryDark"
+              onClick={() => onEditServicios(prestador)}
+            >
+              <Layers className="size-4" />
+              Gestionar servicios
+            </Button>
+          ) : null}
+          {onOpenCuenta ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full cursor-pointer border-medical-border/80 hover:bg-medical-secondary"
+              onClick={() => onOpenCuenta(prestador)}
+            >
+              <Wallet className="size-4" />
+              Ver estado de cuenta
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
