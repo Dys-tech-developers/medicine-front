@@ -1,4 +1,4 @@
-import type { ModalidadCobro, PacienteServicioEstado, PeriodoControl } from "@/lib/api/types";
+import type { PacienteServicioEstado, PeriodoControl } from "@/lib/api/types";
 
 export const PERIODOS_CONTROL: PeriodoControl[] = ["diario", "semanal", "mensual"];
 

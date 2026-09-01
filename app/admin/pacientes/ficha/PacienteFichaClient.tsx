@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -146,11 +146,10 @@ function SectionTitle({
   );
 }
 
-export default function PacienteFichaPage() {
-  const params = useParams<{ id: string }>();
+export default function PacienteFichaClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pacienteId = Number(params.id);
+  const pacienteId = Number(searchParams.get("id"));
 
   const [session, setSession] = useState<AuthSession | null>(null);
   const [tab, setTab] = useState<FichaTab>("resumen");

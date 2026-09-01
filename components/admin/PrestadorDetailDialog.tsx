@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Layers,
   Mail,
+  Pencil,
   Stethoscope,
   User,
   Wallet,
@@ -79,6 +80,7 @@ type PrestadorDetailDialogProps = {
   open: boolean;
   prestador: PrestadorListItemDto | null;
   onClose: () => void;
+  onEdit?: (prestador: PrestadorListItemDto) => void;
   onEditServicios?: (prestador: PrestadorListItemDto) => void;
   onOpenCuenta?: (prestador: PrestadorListItemDto) => void;
 };
@@ -87,6 +89,7 @@ export function PrestadorDetailDialog({
   open,
   prestador,
   onClose,
+  onEdit,
   onEditServicios,
   onOpenCuenta,
 }: PrestadorDetailDialogProps) {
@@ -212,8 +215,8 @@ export function PrestadorDetailDialog({
                   {formatPrestadorServiciosList(prestador.servicios)}
                 </p>
                 <p className="mt-2 text-xs text-medical-mutedText">
-                  Desde «Acciones» en la tabla o el botón de abajo podés agregar o quitar
-                  prestaciones habilitadas.
+                  Desde «Editar datos» podés cambiar el perfil, la contraseña y los servicios
+                  habilitados.
                 </p>
               </div>
             </InfoCard>
@@ -263,10 +266,21 @@ export function PrestadorDetailDialog({
 
         {/* Footer */}
         <div className={cn("shrink-0 space-y-2 px-5 py-3 sm:px-6", MEDICAL_UI.dialogFooter)}>
-          {onEditServicios ? (
+          {onEdit ? (
             <Button
               type="button"
               className="w-full cursor-pointer bg-medical-primary text-white hover:bg-medical-primaryDark"
+              onClick={() => onEdit(prestador)}
+            >
+              <Pencil className="size-4" />
+              Editar datos
+            </Button>
+          ) : null}
+          {onEditServicios ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full cursor-pointer border-medical-border/80 hover:bg-medical-secondary"
               onClick={() => onEditServicios(prestador)}
             >
               <Layers className="size-4" />

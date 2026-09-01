@@ -24,6 +24,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import type { ObraSocialListItemDto } from "@/lib/api/types";
+import { canManageObrasSociales } from "@/lib/admin-permissions";
 import { loadAuthSession, type AuthSession } from "@/lib/auth-session";
 import { useObrasSocialesList } from "@/lib/hooks/use-obras-sociales-list";
 import {
@@ -67,6 +68,7 @@ export default function AdminObrasSocialesPage() {
   }, []);
 
   const token = session?.accessToken ?? null;
+  const canManage = canManageObrasSociales(session?.roles ?? []);
 
   const estadoParam =
     estadoFilter === "all" ? undefined : estadoFilter === "active";
@@ -175,16 +177,18 @@ export default function AdminObrasSocialesPage() {
                       Obras sociales
                     </CardTitle>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className={primaryButtonClass}
-                    onClick={() => setView("formulario")}
-                  >
-                    <Plus className="size-4" />
-                    <span className="sm:hidden">Nueva</span>
-                    <span className="hidden sm:inline">Nueva obra social</span>
-                  </Button>
+                  {canManage ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={primaryButtonClass}
+                      onClick={() => setView("formulario")}
+                    >
+                      <Plus className="size-4" />
+                      <span className="sm:hidden">Nueva</span>
+                      <span className="hidden sm:inline">Nueva obra social</span>
+                    </Button>
+                  ) : null}
                 </div>
               </CardHeader>
 
@@ -253,6 +257,7 @@ export default function AdminObrasSocialesPage() {
                   loading={loading}
                   error={error}
                   accessToken={session.accessToken}
+                  canManage={canManage}
                   onRetry={refresh}
                   onObraUpdated={upsertObraSocial}
                   onObraRemoved={removeObraSocial}

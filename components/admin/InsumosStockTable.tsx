@@ -137,7 +137,7 @@ function VencimientoCell({
   onEdit,
 }: {
   insumo: InsumoListItemDto;
-  onEdit: () => void;
+  onEdit?: () => void;
 }) {
   const status = getInsumoVencimientoStatus(insumo);
   const dias = getInsumoDiasParaVencer(insumo);
@@ -148,12 +148,44 @@ function VencimientoCell({
 
   const label = insumoVencimientoStatusLabel(status, dias);
   const fecha = formatInsumoFechaVencimiento(insumo.fechaVencimiento);
+  const editable = onEdit != null;
   const title =
     status === "vencido"
-      ? `${fecha} — vencido, clic para editar`
+      ? `${fecha} — vencido${editable ? ", clic para editar" : ""}`
       : status === "proximo"
-        ? `${fecha} — próximo a vencer, clic para editar`
+        ? `${fecha} — próximo a vencer${editable ? ", clic para editar" : ""}`
         : `${fecha} — vigente`;
+
+  const statusClass =
+    status === "vencido"
+      ? "text-medical-danger"
+      : status === "proximo"
+        ? "text-medical-warning"
+        : "text-foreground";
+
+  const content = (
+    <>
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+        <span
+          className={cn("size-2 shrink-0 rounded-full", insumoVencimientoDotClass(status))}
+          aria-hidden
+        />
+        {label}
+      </span>
+      <span className="text-[11px] text-muted-foreground">{fecha}</span>
+    </>
+  );
+
+  if (!editable) {
+    return (
+      <span
+        className={cn("inline-flex flex-col items-start gap-0.5 px-2 py-1", statusClass)}
+        title={title}
+      >
+        {content}
+      </span>
+    );
+  }
 
   return (
     <button
@@ -164,23 +196,12 @@ function VencimientoCell({
       }}
       className={cn(
         "inline-flex cursor-pointer flex-col items-start gap-0.5 rounded-lg px-2 py-1 text-left transition hover:bg-medical-secondary/80",
-        status === "vencido"
-          ? "text-medical-danger"
-          : status === "proximo"
-            ? "text-medical-warning"
-            : "text-foreground"
+        statusClass
       )}
       title={title}
       aria-label={title}
     >
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium">
-        <span
-          className={cn("size-2 shrink-0 rounded-full", insumoVencimientoDotClass(status))}
-          aria-hidden
-        />
-        {label}
-      </span>
-      <span className="text-[11px] text-muted-foreground">{fecha}</span>
+      {content}
     </button>
   );
 }
@@ -271,6 +292,8 @@ export type InsumosStockTableProps = {
   accessToken: string | null;
   onUpdated: () => void;
   onDeleted?: (count: number, detail?: string) => void;
+  /** false para OPERADOR: solo lectura (editar/eliminar insumos es solo ADMIN). */
+  canManage?: boolean;
 };
 
 export function InsumosStockTable({
@@ -283,6 +306,7 @@ export function InsumosStockTable({
   accessToken,
   onUpdated,
   onDeleted,
+  canManage = true,
 }: InsumosStockTableProps) {
   const blockNavigationRef = useRef(false);
   const [editTarget, setEditTarget] = useState<InsumoListItemDto | null>(null);
@@ -291,7 +315,7 @@ export function InsumosStockTable({
   const [deleteError, setDeleteError] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
 
-  const canSelect = Boolean(accessToken);
+  const canSelect = Boolean(accessToken) && canManage;
 
   const allPageSelected = useMemo(
     () =>
@@ -308,13 +332,17 @@ export function InsumosStockTable({
     action();
   }, []);
 
-  const openEditFromRow = useCallback((insumo: InsumoListItemDto) => {
-    if (blockNavigationRef.current) {
-      blockNavigationRef.current = false;
-      return;
-    }
-    setEditTarget(insumo);
-  }, []);
+  const openEditFromRow = useCallback(
+    (insumo: InsumoListItemDto) => {
+      if (blockNavigationRef.current) {
+        blockNavigationRef.current = false;
+        return;
+      }
+      if (!canManage) return;
+      setEditTarget(insumo);
+    },
+    [canManage]
+  );
 
   const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -441,10 +469,12 @@ export function InsumosStockTable({
           title="No hay insumos registrados"
           description="Todavía no hay registros. Podés dar de alta el primero desde el formulario."
           action={
-            <Button type="button" onClick={onCreate} className="bg-medical-primary hover:bg-medical-primaryDark">
-              <PackagePlus className="size-4" />
-              Dar de alta
-            </Button>
+            canManage ? (
+              <Button type="button" onClick={onCreate} className="bg-medical-primary hover:bg-medical-primaryDark">
+                <PackagePlus className="size-4" />
+                Dar de alta
+              </Button>
+            ) : undefined
           }
         />
       </div>
@@ -495,7 +525,8 @@ export function InsumosStockTable({
               <TableRow
                 key={insumo.id}
                 className={cn(
-                  "group cursor-pointer transition-colors hover:bg-medical-secondary/30",
+                  "group transition-colors hover:bg-medical-secondary/30",
+                  canManage && "cursor-pointer",
                   selected && "bg-medical-primary/5"
                 )}
                 onClick={() => openEditFromRow(insumo)}
@@ -556,7 +587,10 @@ export function InsumosStockTable({
                   className={cn(tdClass, "hidden md:table-cell")}
                   onClick={(e: SyntheticEvent) => e.stopPropagation()}
                 >
-                  <VencimientoCell insumo={insumo} onEdit={() => setEditTarget(insumo)} />
+                  <VencimientoCell
+                    insumo={insumo}
+                    onEdit={canManage ? () => setEditTarget(insumo) : undefined}
+                  />
                 </TableCell>
 
                 <TableCell className={cn(tdClass, "hidden lg:table-cell")}>

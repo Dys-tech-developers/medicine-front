@@ -1,5 +1,7 @@
-import { getApiBaseUrl, isNgrokBackend } from "@/lib/api/config";
+import { buildApiUrl, getApiBaseUrl, isNgrokBackend } from "@/lib/api/config";
 import type { ApiFailure, ApiResponse } from "@/lib/api/types";
+import { clearAuthSession } from "@/lib/auth-session";
+import { invalidateAdminListCache } from "@/lib/cache/admin-list-cache";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -18,6 +20,35 @@ export class ApiError extends Error {
 type ApiFetchOptions = RequestInit & {
   token?: string;
 };
+
+// El backend puede devolver 401 en change-password por contraseña actual
+// incorrecta, y en logout con un token ya vencido: en esos casos no hay que
+// desloguear a la fuerza.
+const AUTO_LOGOUT_EXCLUDED_PATHS = [
+  "/api/v1/auth/change-password",
+  "/api/v1/auth/logout",
+];
+
+/**
+ * Sesión vencida o token revocado: limpia la sesión local y la caché en
+ * memoria, y redirige al login. Se dispara ante un 401 de rutas autenticadas.
+ */
+export function handleSessionExpired(): void {
+  if (typeof window === "undefined") return;
+  clearAuthSession();
+  invalidateAdminListCache();
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign("/login");
+  }
+}
+
+function shouldAutoLogout(path: string, token: string | undefined, status: number): boolean {
+  return (
+    status === 401 &&
+    Boolean(token) &&
+    !AUTO_LOGOUT_EXCLUDED_PATHS.some((excluded) => path.startsWith(excluded))
+  );
+}
 
 function buildRequestHeaders(
   token: string | undefined,
@@ -40,7 +71,7 @@ function buildRequestHeaders(
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { token, headers, ...rest } = options;
-  const url = `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = buildApiUrl(path);
 
   let response: Response;
   try {
@@ -74,18 +105,16 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new ApiError(message, "NETWORK_ERROR", 0);
   }
 
-  const text = await response.text();
-  const isDeleteServicio =
-    rest.method === "DELETE" && /\/api\/v1\/servicios\/\d+$/.test(path);
-
-  if (isDeleteServicio) {
-    console.log("[deleteServicio] respuesta del backend", {
-      status: response.status,
-      statusText: response.statusText,
-      contentType: response.headers.get("content-type"),
-      body: text.length > 0 ? text : "(sin cuerpo — típico en 204 No Content)",
-    });
+  if (shouldAutoLogout(path, token, response.status)) {
+    handleSessionExpired();
+    throw new ApiError(
+      "Tu sesión expiró. Volvé a iniciar sesión.",
+      "SESSION_EXPIRED",
+      401
+    );
   }
+
+  const text = await response.text();
 
   if (response.status === 204 || (response.ok && !text.trim())) {
     if (!response.ok) {

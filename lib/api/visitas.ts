@@ -25,7 +25,6 @@ import type {
   VisitaPendienteCoberturaActivaDto,
   VisitaPendienteDto,
   VisitaPrestadorResumenDto,
-  VisitaEstado,
 } from "@/lib/api/types";
 import { normalizeTipoDia } from "@/lib/servicios-tarifas-labels";
 import { parseVisitaEstado } from "@/lib/visita-estado-labels";

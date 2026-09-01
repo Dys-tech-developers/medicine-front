@@ -9,7 +9,7 @@ import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import {
   getPrestadorByIdWithApi,
-  updatePrestadorServiciosWithApi,
+  updatePrestadorWithApi,
 } from "@/lib/api/prestadores";
 import { listServiciosAllWithApi } from "@/lib/api/servicios";
 import type { PrestadorListItemDto, ServicioConTarifasDto } from "@/lib/api/types";
@@ -85,7 +85,7 @@ export function PrestadorServiciosEditDialog({
     setError("");
     const startedAt = Date.now();
     try {
-      const updated = await updatePrestadorServiciosWithApi(accessToken, prestador.id, {
+      const updated = await updatePrestadorWithApi(accessToken, prestador.id, {
         servicioIds: uniqueIds,
       });
       await delayRemaining(DEFAULT_MIN_LOADING_MS, startedAt);

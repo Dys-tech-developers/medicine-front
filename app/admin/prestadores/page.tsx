@@ -34,6 +34,7 @@ import {
 } from "@/lib/api/carga-masiva-prestadores";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import type { PrestadorListItemDto } from "@/lib/api/types";
+import { canAccessPrestadores } from "@/lib/admin-permissions";
 import { loadAuthSession, type AuthSession } from "@/lib/auth-session";
 import { usePrestadoresList } from "@/lib/hooks/use-prestadores-list";
 import {
@@ -100,7 +101,7 @@ export default function AdminPrestadoresPage() {
     refresh: bumpList,
   } = usePrestadoresList({
     accessToken: session?.accessToken ?? null,
-    enabled: Boolean(session) && isListView,
+    enabled: Boolean(session) && isListView && canAccessPrestadores(session?.roles ?? []),
     page,
     pageSize,
     periodFilters: appliedPeriodFilters,
@@ -247,6 +248,25 @@ export default function AdminPrestadoresPage() {
       setExportingList(false);
     }
   }, [session?.accessToken, searchQuery, appliedPeriodFilters, showToast]);
+
+  // El backend solo permite listar/gestionar prestadores al rol ADMIN
+  if (ready && session && !canAccessPrestadores(session.roles)) {
+    return (
+      <div className="relative z-0 w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
+        <Card className="border-medical-border p-10">
+          <div className="mx-auto max-w-md text-center">
+            <span className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-medical-secondary text-medical-primary">
+              <Stethoscope className="size-6" />
+            </span>
+            <h1 className="text-lg font-bold text-medical-text">Acceso restringido</h1>
+            <p className="mt-2 text-sm text-medical-mutedText">
+              La gestión de prestadores está disponible solo para administradores.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <>

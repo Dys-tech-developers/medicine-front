@@ -33,6 +33,7 @@ import {
 } from "@/lib/api/carga-masiva-stock";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import type { InsumoDto } from "@/lib/api/types";
+import { canManageStock } from "@/lib/admin-permissions";
 import { loadAuthSession, type AuthSession } from "@/lib/auth-session";
 import { useInsumosList } from "@/lib/hooks/use-insumos-list";
 import { matchesInsumoSearch } from "@/lib/insumos-display";
@@ -76,6 +77,8 @@ export default function AdminStockPage() {
     setSession(parsed);
     setReady(true);
   }, []);
+
+  const canManage = canManageStock(session?.roles ?? []);
 
   const { items, total, loading, error, refresh } = useInsumosList({
     accessToken: session?.accessToken ?? null,
@@ -294,45 +297,47 @@ export default function AdminStockPage() {
                       Stock de insumos
                     </CardTitle>
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className={headerOutlineButtonClass}
-                      disabled={downloadingPlantilla}
-                      onClick={() => void handleDownloadPlantilla()}
-                    >
-                      {downloadingPlantilla ? (
-                        <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                      ) : (
-                        <Download className="size-4" />
-                      )}
-                      <span className="hidden sm:inline">Descargar planilla</span>
-                      <span className="sm:hidden">Planilla</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className={headerOutlineButtonClass}
-                      onClick={() => setCargaMasivaOpen(true)}
-                    >
-                      <Upload className="size-4" />
-                      <span className="hidden sm:inline">Carga masiva</span>
-                      <span className="sm:hidden">Cargar</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className={primaryButtonClass}
-                      onClick={() => setView("formulario")}
-                    >
-                      <PackagePlus className="size-4" />
-                      <span className="sm:hidden">Nuevo</span>
-                      <span className="hidden sm:inline">Nuevo insumo</span>
-                    </Button>
-                  </div>
+                  {canManage ? (
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={headerOutlineButtonClass}
+                        disabled={downloadingPlantilla}
+                        onClick={() => void handleDownloadPlantilla()}
+                      >
+                        {downloadingPlantilla ? (
+                          <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        ) : (
+                          <Download className="size-4" />
+                        )}
+                        <span className="hidden sm:inline">Descargar planilla</span>
+                        <span className="sm:hidden">Planilla</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={headerOutlineButtonClass}
+                        onClick={() => setCargaMasivaOpen(true)}
+                      >
+                        <Upload className="size-4" />
+                        <span className="hidden sm:inline">Carga masiva</span>
+                        <span className="sm:hidden">Cargar</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className={primaryButtonClass}
+                        onClick={() => setView("formulario")}
+                      >
+                        <PackagePlus className="size-4" />
+                        <span className="sm:hidden">Nuevo</span>
+                        <span className="hidden sm:inline">Nuevo insumo</span>
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </CardHeader>
 
@@ -490,6 +495,7 @@ export default function AdminStockPage() {
                   accessToken={session?.accessToken ?? null}
                   onUpdated={handleInsumoUpdated}
                   onDeleted={handleInsumoDeleted}
+                  canManage={canManage}
                 />
               </CardContent>
 

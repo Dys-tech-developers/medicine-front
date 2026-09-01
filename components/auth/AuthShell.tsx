@@ -51,7 +51,7 @@ export function AuthShell({ children, footer }: AuthShellProps) {
         <aside className="relative hidden overflow-hidden lg:block lg:w-[56%] xl:w-[32%]">
           <div
             className="absolute inset-0 bg-cover bg-no-repeat"
-            style={{ backgroundImage: "url('./portadamed.png')" }}
+            style={{ backgroundImage: "url('/portadasalud.png')" }}
           />
         </aside>
 

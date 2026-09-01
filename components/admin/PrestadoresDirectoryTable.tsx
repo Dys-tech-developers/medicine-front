@@ -13,6 +13,7 @@ import {
   IdCard,
   Layers,
   MoreHorizontal,
+  Pencil,
   RefreshCw,
   Search,
   Stethoscope,
@@ -20,6 +21,7 @@ import {
   UserPlus,
   Wallet,
 } from "lucide-react";
+import { EditPrestadorDialog } from "@/components/admin/EditPrestadorDialog";
 import { PrestadorDetailDialog } from "@/components/admin/PrestadorDetailDialog";
 import { PrestadorEstadoCuentaDialog } from "@/components/admin/PrestadorEstadoCuentaDialog";
 import { PrestadorServiciosEditDialog } from "@/components/admin/PrestadorServiciosEditDialog";
@@ -128,6 +130,7 @@ function ColumnHeader({
 type RowHandlers = {
   onOpenDetail: (row: PrestadorListItemDto) => void;
   onOpenCuenta: (row: PrestadorListItemDto) => void;
+  onEdit?: (row: PrestadorListItemDto) => void;
   onEditServicios?: (row: PrestadorListItemDto) => void;
 };
 
@@ -135,6 +138,7 @@ function PrestadorRowActionsMenu({
   row,
   onOpenDetail,
   onOpenCuenta,
+  onEdit,
   onEditServicios,
   compact,
 }: {
@@ -179,6 +183,15 @@ function PrestadorRowActionsMenu({
           <Eye className="size-4 text-medical-primary" />
           Ver ficha
         </DropdownMenuItem>
+        {onEdit ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
+            onSelect={() => onEdit(row)}
+          >
+            <Pencil className="size-4 text-medical-primary" />
+            Editar datos
+          </DropdownMenuItem>
+        ) : null}
         {onEditServicios ? (
           <DropdownMenuItem
             className="cursor-pointer gap-2 rounded-lg focus:bg-medical-secondary"
@@ -388,6 +401,7 @@ function PrestadorRowCard({
   cuenta,
   onOpenDetail,
   onOpenCuenta,
+  onEdit,
   onEditServicios,
 }: {
   row: PrestadorListItemDto;
@@ -413,6 +427,7 @@ function PrestadorRowCard({
                 compact
                 onOpenDetail={onOpenDetail}
                 onOpenCuenta={onOpenCuenta}
+                onEdit={onEdit}
                 onEditServicios={onEditServicios}
               />
             </div>
@@ -501,6 +516,7 @@ function PrestadorRowDesktop({
   cuenta,
   onOpenDetail,
   onOpenCuenta,
+  onEdit,
   onEditServicios,
 }: {
   row: PrestadorListItemDto;
@@ -609,6 +625,7 @@ function PrestadorRowDesktop({
             row={row}
             onOpenDetail={onOpenDetail}
             onOpenCuenta={onOpenCuenta}
+            onEdit={onEdit}
             onEditServicios={onEditServicios}
           />
         </div>
@@ -630,12 +647,15 @@ export function PrestadoresDirectoryTable({
 }: PrestadoresDirectoryTableProps) {
   const [detailTarget, setDetailTarget] = useState<PrestadorListItemDto | null>(null);
   const [cuentaTarget, setCuentaTarget] = useState<PrestadorListItemDto | null>(null);
+  const [editTarget, setEditTarget] = useState<PrestadorListItemDto | null>(null);
   const [serviciosTarget, setServiciosTarget] = useState<PrestadorListItemDto | null>(null);
 
   const handlers: RowHandlers = {
     onOpenDetail: setDetailTarget,
     onOpenCuenta: setCuentaTarget,
-    ...(accessToken ? { onEditServicios: setServiciosTarget } : {}),
+    ...(accessToken
+      ? { onEdit: setEditTarget, onEditServicios: setServiciosTarget }
+      : {}),
   };
 
   if (loading) {
@@ -715,6 +735,14 @@ export function PrestadoresDirectoryTable({
         open={detailTarget != null}
         prestador={detailTarget}
         onClose={() => setDetailTarget(null)}
+        onEdit={
+          accessToken
+            ? (p) => {
+                setDetailTarget(null);
+                setEditTarget(p);
+              }
+            : undefined
+        }
         onEditServicios={
           accessToken
             ? (p) => {
@@ -726,6 +754,16 @@ export function PrestadoresDirectoryTable({
         onOpenCuenta={(p) => {
           setDetailTarget(null);
           setCuentaTarget(p);
+        }}
+      />
+      <EditPrestadorDialog
+        open={editTarget != null}
+        prestador={editTarget}
+        accessToken={accessToken}
+        onClose={() => setEditTarget(null)}
+        onUpdated={() => {
+          setEditTarget(null);
+          onRefresh?.();
         }}
       />
       <PrestadorServiciosEditDialog

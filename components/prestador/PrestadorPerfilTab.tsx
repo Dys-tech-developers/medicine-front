@@ -8,7 +8,6 @@ import {
   IdCard,
   Layers,
   KeyRound,
-  Loader2,
   Mail,
   RefreshCw,
   Stethoscope,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LogoutLink } from "@/components/auth/LogoutLink";
 import { SimecLogo } from "@/components/brand/SimecLogo";
+import { isAdmin } from "@/lib/admin-permissions";
 import {
   AUTH_SESSION_UPDATED_EVENT,
   loadAuthSession,
@@ -26,9 +27,17 @@ import {
   X,
 } from "lucide-react";
 
-const SIDEBAR_ITEMS = [
+type SidebarItem = {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  adminOnly?: boolean;
+};
+
+const SIDEBAR_ITEMS: SidebarItem[] = [
   { label: "Resumen", href: "/admin", icon: LayoutDashboard },
-  { label: "Prestadores", href: "/admin/prestadores", icon: Stethoscope },
+  // El listado de prestadores es solo ADMIN en el backend
+  { label: "Prestadores", href: "/admin/prestadores", icon: Stethoscope, adminOnly: true },
   { label: "Visitas", href: "/admin/visitas", icon: ClipboardList },
   { label: "Pacientes", href: "/admin/pacientes", icon: User },
   { label: "Obras sociales", href: "/admin/obras-sociales", icon: Building2 },
@@ -137,7 +146,9 @@ export function AdminSidebar({ mobileOpen = false, onMobileClose }: AdminSidebar
 
         {/* Nav */}
         <nav className={["min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain", collapsed ? "px-0" : ""].join(" ")}>
-          {SIDEBAR_ITEMS.map(({ label, href, icon: Icon }) => {
+          {SIDEBAR_ITEMS.filter(
+            ({ adminOnly }) => !adminOnly || isAdmin(session?.roles ?? [])
+          ).map(({ label, href, icon: Icon }) => {
             const isActive =
               href === "/admin"
                 ? pathname === "/admin"

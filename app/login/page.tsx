@@ -32,7 +32,6 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const auth = await loginWithApi(email.trim(), password);
-      console.log("[login] respuesta del backend:", auth);
       const session = buildAuthSessionFromLogin(auth);
       saveAuthSession(session);
       window.location.assign(getRedirectPathForRole(session.role));
@@ -98,10 +97,7 @@ export default function LoginPage() {
           {/* Foto de salud a pantalla completa */}
           <div
             className="absolute inset-0 bg-cover bg-no-repeat"
-            style={{
-              backgroundImage:
-                "url('./portadasalud.png')",
-            }}
+            style={{ backgroundImage: "url('/portadasalud.png')" }}
           />
 
         </aside>

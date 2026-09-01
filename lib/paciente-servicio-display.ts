@@ -4,10 +4,7 @@ import type {
   PacienteServicioDisponibilidadDto,
   PeriodoControl,
 } from "@/lib/api/types";
-import {
-  MODALIDAD_COBRO_LABELS,
-  PERIODO_CONTROL_LABELS,
-} from "@/lib/paciente-servicios-labels";
+import { MODALIDAD_COBRO_LABELS } from "@/lib/paciente-servicios-labels";
 
 export type PacienteServicioCupoSource = {
   periodoControl: PeriodoControl;

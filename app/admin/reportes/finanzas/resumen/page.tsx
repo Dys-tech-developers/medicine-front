@@ -31,7 +31,6 @@ import type {
   ReportePrestadorItemDto,
   ReporteServicioItemDto,
   ReportesMetaDto,
-  ServicioConTarifasDto,
 } from "@/lib/api/types";
 import { loadAuthSession, type AuthSession } from "@/lib/auth-session";
 import {

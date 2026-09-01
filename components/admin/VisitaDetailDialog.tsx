@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import type { VisitaListItemDto } from "@/lib/api/types";
 import {
-  formatVisitaDateTime,
   formatVisitaDuracion,
   formatVisitaFecha,
   getPacienteNombre,

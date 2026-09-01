@@ -71,6 +71,8 @@ export type ObrasSocialesDirectoryTableProps = {
   onObraRemoved: (id: number) => void;
   onNotify: (title: string, type: "success" | "error", detail?: string) => void;
   onCreate: () => void;
+  /** false para OPERADOR: solo lectura (crear/editar/eliminar es solo ADMIN). */
+  canManage?: boolean;
 };
 
 const thClass =
@@ -162,6 +164,7 @@ export function ObrasSocialesDirectoryTable({
   onObraRemoved,
   onNotify,
   onCreate,
+  canManage = true,
 }: ObrasSocialesDirectoryTableProps) {
   const blockNavigationRef = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<ObraSocialListItemDto | null>(null);
@@ -179,13 +182,17 @@ export function ObrasSocialesDirectoryTable({
     action();
   }, []);
 
-  const openEditFromRow = useCallback((obra: ObraSocialListItemDto) => {
-    if (blockNavigationRef.current) {
-      blockNavigationRef.current = false;
-      return;
-    }
-    setEditTarget(obra);
-  }, []);
+  const openEditFromRow = useCallback(
+    (obra: ObraSocialListItemDto) => {
+      if (blockNavigationRef.current) {
+        blockNavigationRef.current = false;
+        return;
+      }
+      if (!canManage) return;
+      setEditTarget(obra);
+    },
+    [canManage]
+  );
 
   const closeEstadoConfirm = useCallback(() => {
     if (estadoConfirmLoading) return;
@@ -286,10 +293,12 @@ export function ObrasSocialesDirectoryTable({
           title="Sin obras sociales registradas"
           description="Registrá las obras sociales para asignarlas al alta de pacientes."
           action={
-            <Button type="button" onClick={onCreate} className="bg-medical-primary hover:bg-medical-primaryDark">
-              <Plus className="size-4" />
-              Nueva obra social
-            </Button>
+            canManage ? (
+              <Button type="button" onClick={onCreate} className="bg-medical-primary hover:bg-medical-primaryDark">
+                <Plus className="size-4" />
+                Nueva obra social
+              </Button>
+            ) : undefined
           }
         />
       </div>
@@ -359,7 +368,7 @@ export function ObrasSocialesDirectoryTable({
                 className="group transition-colors hover:bg-medical-secondary/30"
               >
                 <TableCell
-                  className={cn(tdClass, "cursor-pointer")}
+                  className={cn(tdClass, canManage && "cursor-pointer")}
                   onClick={() => !busy && openEditFromRow(obra)}
                 >
                   <div className="flex items-center gap-3">
@@ -383,7 +392,7 @@ export function ObrasSocialesDirectoryTable({
                 </TableCell>
 
                 <TableCell
-                  className={cn(tdClass, "hidden cursor-pointer sm:table-cell")}
+                  className={cn(tdClass, "hidden sm:table-cell", canManage && "cursor-pointer")}
                   onClick={() => !busy && openEditFromRow(obra)}
                 >
                   <span className="font-mono text-sm font-medium text-foreground">
@@ -399,7 +408,7 @@ export function ObrasSocialesDirectoryTable({
                     <Switch
                       id={`obra-estado-${obra.id}`}
                       checked={activo}
-                      disabled={busy}
+                      disabled={busy || !canManage}
                       onCheckedChange={(checked) =>
                         setEstadoConfirm({ obra, nextEstado: checked })
                       }
@@ -434,12 +443,14 @@ export function ObrasSocialesDirectoryTable({
                   onPointerDown={(e: SyntheticEvent) => e.stopPropagation()}
                 >
                   <div className="flex min-h-9 items-center justify-end">
-                    <ObraSocialRowActionsMenu
-                      obra={obra}
-                      runMenuAction={runMenuAction}
-                      busy={busy}
-                      {...rowHandlers}
-                    />
+                    {canManage ? (
+                      <ObraSocialRowActionsMenu
+                        obra={obra}
+                        runMenuAction={runMenuAction}
+                        busy={busy}
+                        {...rowHandlers}
+                      />
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>

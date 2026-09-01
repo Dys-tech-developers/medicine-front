@@ -40,9 +40,7 @@ import {
   getVisitaInsumosCount,
 } from "@/lib/visitas-display";
 import {
-  formatVisitaEstado,
   formatVisitaEstadoContextual,
-  visitaEstadoBadgeClass,
   visitaEstadoBadgeClassContextual,
 } from "@/lib/visita-estado-labels";
 import { cn } from "@/lib/utils";

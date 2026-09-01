@@ -1,23 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { loadAuthSession } from "@/lib/auth-session";
-import { canViewReportes } from "@/lib/reportes/access";
+import { useAuthSession } from "@/lib/hooks/use-auth-session";
 
 export default function ReportesLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const parsed = loadAuthSession();
-    if (!parsed || !canViewReportes(parsed.roles)) {
-      window.location.assign("/login");
-      return;
-    }
-    setReady(true);
-  }, []);
+  // Reportes es para ADMIN y OPERADOR: exactamente el rol de app "admin"
+  const { ready } = useAuthSession({ requiredRole: "admin" });
 
   useEffect(() => {
     if (!ready) return;

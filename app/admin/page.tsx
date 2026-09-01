@@ -24,6 +24,7 @@ import { InsumosStockPanel } from "@/components/admin/InsumosStockPanel";
 import { VisitasRecentPanel } from "@/components/admin/VisitasRecentPanel";
 import { listUsersWithApi } from "@/lib/api/users";
 import type { UserListItemDto } from "@/lib/api/types";
+import { isAdmin } from "@/lib/admin-permissions";
 import { loadAuthSession, type AuthSession } from "@/lib/auth-session";
 import { useInsumosList } from "@/lib/hooks/use-insumos-list";
 import { useMinimumLoadingDisplay } from "@/lib/hooks/use-minimum-loading-display";
@@ -72,10 +73,16 @@ function currentMonthLabel(): string {
 }
 
 /* ─── Accesos rápidos ────────────────────────────────────────────── */
-const QUICK_ACTIONS = [
+const QUICK_ACTIONS: {
+  label: string;
+  href: string;
+  icon: React.ElementType;
+  adminOnly?: boolean;
+}[] = [
   { label: "Pacientes", href: "/admin/pacientes", icon: Users },
   { label: "Visitas", href: "/admin/visitas", icon: ClipboardList },
-  { label: "Prestadores", href: "/admin/prestadores", icon: Stethoscope },
+  // La página de prestadores es solo ADMIN en el backend
+  { label: "Prestadores", href: "/admin/prestadores", icon: Stethoscope, adminOnly: true },
   { label: "Obras sociales", href: "/admin/obras-sociales", icon: Building2 },
   { label: "Servicios", href: "/admin/servicios", icon: Layers },
   { label: "Stock", href: "/admin/stock", icon: Package },
@@ -227,7 +234,9 @@ function HeroSection({
 
           {/* Accesos rápidos — scroll horizontal en móvil, grilla en desktop */}
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 xl:mx-0 xl:grid xl:max-w-none xl:shrink-0 xl:grid-cols-6 xl:gap-2 xl:overflow-visible xl:pb-0">
-            {QUICK_ACTIONS.map(({ label, href, icon: Icon }) => (
+            {QUICK_ACTIONS.filter(
+              ({ adminOnly }) => !adminOnly || isAdmin(session?.roles ?? [])
+            ).map(({ label, href, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
@@ -275,7 +284,7 @@ function HeroSection({
             label="Prestadores activos"
             value={prestadoresActivos}
             sub={!prestadoresLoading && prestadoresTotal > 0 ? `de ${prestadoresTotal} total` : undefined}
-            href="/admin/prestadores"
+            href={isAdmin(session?.roles ?? []) ? "/admin/prestadores" : undefined}
             loading={prestadoresLoading}
           />
           <HeroKpi
@@ -973,14 +982,16 @@ export default function AdminDashboardPage() {
                   <PrestadorItem key={item.id} item={item} index={index} />
                 ))}
               </ul>
-              <div className="border-t border-medical-border/60 bg-medical-secondary/25 px-4 py-2.5 text-center sm:px-5">
-                <Link
-                  href="/admin/prestadores"
-                  className="text-xs font-semibold text-medical-primary hover:underline"
-                >
-                  Ver directorio de prestadores →
-                </Link>
-              </div>
+              {isAdmin(session?.roles ?? []) ? (
+                <div className="border-t border-medical-border/60 bg-medical-secondary/25 px-4 py-2.5 text-center sm:px-5">
+                  <Link
+                    href="/admin/prestadores"
+                    className="text-xs font-semibold text-medical-primary hover:underline"
+                  >
+                    Ver directorio de prestadores →
+                  </Link>
+                </div>
+              ) : null}
             </>
           )}
         </SectionCard>

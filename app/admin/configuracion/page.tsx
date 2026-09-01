@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { ToastStack } from "@/components/ui/toast-stack";
 import { useToast } from "@/components/ui/use-toast";
+import { canManageUsers } from "@/lib/admin-permissions";
 import { useAuthSession } from "@/lib/hooks/use-auth-session";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,11 @@ export default function AdminConfiguracionPage() {
   const { session, ready } = useAuthSession({ requiredRole: "admin" });
   const { toasts, showToast, dismiss } = useToast(4000);
   const [tab, setTab] = useState<ConfigTab>(() => parseTab(searchParams.get("tab")));
+
+  // La gestión de usuarios (activar/desactivar, editar) es solo ADMIN
+  const showUsersTab = canManageUsers(session?.roles ?? []);
+  const visibleTabs = showUsersTab ? TABS : TABS.filter((t) => t.id !== "usuarios");
+  const activeTab = tab === "usuarios" && !showUsersTab ? "cuenta" : tab;
 
   useEffect(() => {
     setTab(parseTab(searchParams.get("tab")));
@@ -70,14 +76,14 @@ export default function AdminConfiguracionPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => handleTabChange(id)}
               className={cn(
                 "inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition",
-                tab === id
+                activeTab === id
                   ? "border-medical-primary bg-medical-secondary text-medical-primary"
                   : "border-medical-border bg-white text-medical-mutedText hover:bg-medical-surface hover:text-medical-text"
               )}
@@ -88,7 +94,7 @@ export default function AdminConfiguracionPage() {
           ))}
         </div>
 
-        {tab === "cuenta" ? (
+        {activeTab === "cuenta" ? (
           <Card className="border-medical-border bg-medical-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Mi perfil</CardTitle>
@@ -105,7 +111,7 @@ export default function AdminConfiguracionPage() {
           </Card>
         ) : null}
 
-        {tab === "contrasena" ? (
+        {activeTab === "contrasena" ? (
           <Card className="border-medical-border bg-medical-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Cambiar contraseña</CardTitle>
@@ -124,7 +130,7 @@ export default function AdminConfiguracionPage() {
           </Card>
         ) : null}
 
-        {tab === "usuarios" ? (
+        {activeTab === "usuarios" && showUsersTab ? (
           <Card className="border-medical-border bg-medical-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Gestión de usuarios</CardTitle>

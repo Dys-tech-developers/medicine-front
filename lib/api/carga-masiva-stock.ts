@@ -1,5 +1,5 @@
-import { ApiError } from "@/lib/api/client";
-import { getApiBaseUrl, isNgrokBackend } from "@/lib/api/config";
+import { ApiError, handleSessionExpired } from "@/lib/api/client";
+import { buildApiUrl, isNgrokBackend } from "@/lib/api/config";
 import type { ApiFailure, ApiResponse } from "@/lib/api/types";
 
 function buildAuthHeaders(token: string, extra?: HeadersInit): HeadersInit {
@@ -27,6 +27,10 @@ function parseContentDispositionFilename(header: string | null): string | null {
 }
 
 async function throwApiErrorFromResponse(response: Response): Promise<never> {
+  if (response.status === 401) {
+    handleSessionExpired();
+    throw new ApiError("Tu sesión expiró. Volvé a iniciar sesión.", "SESSION_EXPIRED", 401);
+  }
   try {
     const payload = (await response.json()) as ApiFailure | ApiResponse<unknown>;
     if (payload && "success" in payload && !payload.success) {
@@ -52,7 +56,7 @@ export { triggerBrowserFileDownload } from "@/lib/excel-export";
 export async function downloadStockCargaMasivaPlantillaWithApi(
   token: string
 ): Promise<{ blob: Blob; filename: string }> {
-  const url = `${getApiBaseUrl()}/api/v1/carga-masiva/stock/plantilla`;
+  const url = buildApiUrl("/api/v1/carga-masiva/stock/plantilla");
   let response: Response;
   try {
     response = await fetch(url, {
@@ -150,7 +154,7 @@ export async function uploadStockCargaMasivaWithApi(
   token: string,
   file: File
 ): Promise<CargaMasivaStockResultDto> {
-  const url = `${getApiBaseUrl()}/api/v1/carga-masiva/stock`;
+  const url = buildApiUrl("/api/v1/carga-masiva/stock");
   const formData = new FormData();
   formData.append("file", file);
 
@@ -169,6 +173,10 @@ export async function uploadStockCargaMasivaWithApi(
           ? error.message
           : "Error de red";
     throw new ApiError(message, "NETWORK_ERROR", 0);
+  }
+
+  if (response.status === 401) {
+    await throwApiErrorFromResponse(response);
   }
 
   let payload: ApiResponse<CargaMasivaStockResultDto> | ApiFailure | null = null;

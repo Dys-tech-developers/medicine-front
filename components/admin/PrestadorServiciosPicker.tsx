@@ -2,6 +2,7 @@
 
 import type { ServicioConTarifasDto } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Props = {
   servicios: ServicioConTarifasDto[];
@@ -11,6 +12,26 @@ type Props = {
   loading?: boolean;
   emptyMessage?: string;
 };
+
+function PrestadorServiciosPickerSkeleton() {
+  return (
+    <ul
+      className="space-y-2 rounded-xl border border-medical-border bg-medical-surface/50 p-2"
+      aria-busy="true"
+      aria-label="Cargando servicios"
+    >
+      {["w-2/5", "w-3/5", "w-1/2", "w-7/12", "w-1/3"].map((widthClass, i) => (
+        <li
+          key={i}
+          className="flex items-center gap-3 rounded-lg border border-transparent bg-white px-3 py-2.5"
+        >
+          <Skeleton className="size-4 shrink-0 rounded" />
+          <Skeleton className={cn("h-4 rounded-md", widthClass)} />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function PrestadorServiciosPicker({
   servicios,
@@ -32,7 +53,7 @@ export function PrestadorServiciosPicker({
   };
 
   if (loading) {
-    return <p className="text-sm text-medical-mutedText">Cargando servicios…</p>;
+    return <PrestadorServiciosPickerSkeleton />;
   }
 
   if (servicios.length === 0) {

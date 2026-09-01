@@ -7,6 +7,7 @@ import type {
   PrestadorListItemDto,
   ReportePeriodo,
   ReportesMetaDto,
+  UpdatePrestadorBody,
   UpdatePrestadorServiciosBody,
 } from "@/lib/api/types";
 import {
@@ -214,6 +215,20 @@ export async function updatePrestadorServiciosWithApi(
 ): Promise<PrestadorListItemDto> {
   const data = await apiFetch<PrestadorListItemDto>(`/api/v1/prestadores/${id}/servicios`, {
     method: "PUT",
+    token,
+    body: JSON.stringify(body),
+  });
+  return normalizePrestador(data as PrestadorListItemDto & Record<string, unknown>);
+}
+
+/** PATCH parcial. `:id` es el id del prestador (no `userId`). */
+export async function updatePrestadorWithApi(
+  token: string,
+  id: number,
+  body: UpdatePrestadorBody
+): Promise<PrestadorListItemDto> {
+  const data = await apiFetch<PrestadorListItemDto>(`/api/v1/prestadores/${id}`, {
+    method: "PATCH",
     token,
     body: JSON.stringify(body),
   });

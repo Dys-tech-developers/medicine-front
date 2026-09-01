@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { FileText, Loader2, Pencil, X } from "lucide-react";
+import { Loader2, Pencil, X } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import { updateHistoriaClinicaWithApi } from "@/lib/api/historias-clinicas";

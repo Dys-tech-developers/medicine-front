@@ -59,7 +59,7 @@ const INITIAL: FormState = {
   estado: true,
 };
 
-function parseNonNegativeInt(value: string, fieldLabel: string): number | null {
+function parseNonNegativeInt(value: string): number | null {
   const n = Number.parseInt(value, 10);
   if (Number.isNaN(n) || n < 0) return null;
   if (String(n) !== value.trim() && value.trim() !== String(n)) {
@@ -71,10 +71,10 @@ function parseNonNegativeInt(value: string, fieldLabel: string): number | null {
 function validateForm(values: FormState): string | null {
   if (!values.nombre.trim()) return "El nombre es obligatorio.";
   if (!values.codigo.trim()) return "El código es obligatorio.";
-  if (parseNonNegativeInt(values.stockActual, "stock") === null) {
+  if (parseNonNegativeInt(values.stockActual) === null) {
     return "El stock actual debe ser un número entero ≥ 0.";
   }
-  if (parseNonNegativeInt(values.stockMinimo, "mínimo") === null) {
+  if (parseNonNegativeInt(values.stockMinimo) === null) {
     return "El stock mínimo debe ser un número entero ≥ 0.";
   }
   if (values.requiereVencimiento && !values.fechaVencimiento) {
@@ -88,8 +88,8 @@ function toPayload(values: FormState): CreateInsumoBody {
     nombre: values.nombre.trim(),
     codigo: values.codigo.trim().toUpperCase(),
     unidadMedida: values.unidadMedida,
-    stockActual: parseNonNegativeInt(values.stockActual, "stock") ?? 0,
-    stockMinimo: parseNonNegativeInt(values.stockMinimo, "mínimo") ?? 0,
+    stockActual: parseNonNegativeInt(values.stockActual) ?? 0,
+    stockMinimo: parseNonNegativeInt(values.stockMinimo) ?? 0,
     requiereVencimiento: values.requiereVencimiento,
     estado: values.estado,
   };

@@ -50,19 +50,35 @@ export function saveAuthSession(session: AuthSession): void {
 /** Normaliza sesiones guardadas con el nombre de rol anterior (`operador`). */
 function normalizeStoredRole(role: unknown): AppRole | null {
   if (role === "admin" || role === "prestador") return role;
-  if (role === "operador") return "prestador";
+  // El rol legacy `operador` corresponde al panel admin (igual que
+  // resolveAppRole, que mapea OPERADOR del backend a "admin").
+  if (role === "operador") return "admin";
   return null;
 }
+
+// Caché por contenido crudo: mientras el storage no cambie, loadAuthSession
+// devuelve la MISMA referencia. Necesario para usarla como snapshot de
+// useSyncExternalStore sin provocar re-renders infinitos.
+let sessionCacheRaw: string | null = null;
+let sessionCacheValue: AuthSession | null = null;
 
 export function loadAuthSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AuthSession;
-    const role = normalizeStoredRole(parsed.role);
-    if (!parsed.accessToken || !role || !parsed.email) return null;
-    return { ...parsed, role };
+    if (raw === sessionCacheRaw) return sessionCacheValue;
+
+    let value: AuthSession | null = null;
+    if (raw) {
+      const parsed = JSON.parse(raw) as AuthSession;
+      const role = normalizeStoredRole(parsed.role);
+      if (parsed.accessToken && role && parsed.email) {
+        value = { ...parsed, role };
+      }
+    }
+    sessionCacheRaw = raw;
+    sessionCacheValue = value;
+    return value;
   } catch {
     return null;
   }

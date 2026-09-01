@@ -394,8 +394,8 @@ export function PacientesDirectoryTable({
 
   const navigateToFicha = useCallback(
     (paciente: PacienteListItemDto, options?: { tab?: "historia" }) => {
-      const base = `/admin/pacientes/${paciente.id}`;
-      router.push(options?.tab ? `${base}?tab=${options.tab}` : base);
+      const base = `/admin/pacientes/ficha?id=${paciente.id}`;
+      router.push(options?.tab ? `${base}&tab=${options.tab}` : base);
     },
     [router]
   );

@@ -17,26 +17,20 @@ export function useMinimumLoadingDisplay(
   useEffect(() => {
     if (isLoading) {
       startedAtRef.current = Date.now();
-      setDisplayLoading(true);
-      return;
+      // Programado (no sincrónico) para cumplir react-hooks/set-state-in-effect
+      const timer = setTimeout(() => setDisplayLoading(true), 0);
+      return () => clearTimeout(timer);
     }
 
-    if (startedAtRef.current == null) {
-      setDisplayLoading(false);
-      return;
-    }
-
-    const remaining = minMs - (Date.now() - startedAtRef.current);
-    if (remaining <= 0) {
-      startedAtRef.current = null;
-      setDisplayLoading(false);
-      return;
-    }
+    const remaining =
+      startedAtRef.current == null
+        ? 0
+        : minMs - (Date.now() - startedAtRef.current);
 
     const timer = setTimeout(() => {
       startedAtRef.current = null;
       setDisplayLoading(false);
-    }, remaining);
+    }, Math.max(0, remaining));
 
     return () => clearTimeout(timer);
   }, [isLoading, minMs]);

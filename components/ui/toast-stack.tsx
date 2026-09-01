@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, X, XCircle } from "lucide-react";
 import type { ToastItem } from "@/components/ui/use-toast";
@@ -34,12 +34,15 @@ const toastVariants = {
   },
 } as const;
 
-export function ToastStack({ toasts, onDismiss }: ToastStackProps) {
-  const [mounted, setMounted] = useState(false);
+const subscribeNoop = () => () => {};
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export function ToastStack({ toasts, onDismiss }: ToastStackProps) {
+  // true solo después de hidratar en el cliente (el portal no existe en SSR)
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
 
   if (!mounted || toasts.length === 0 || typeof document === "undefined") {
     return null;

@@ -1,0 +1,39 @@
+RewriteEngine On
+
+# Si el archivo o directorio existe, servirlo tal cual.
+# Con trailingSlash, cada ruta se exporta como carpeta/index.html
+# (ej: /admin/ -> admin/index.html), así que esto cubre la navegación normal.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Fallback: si existe la versión .html de la ruta, servirla
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.*)$ $1.html [L]
+
+# Página 404 del export de Next.js
+ErrorDocument 404 /404.html
+
+# ── Cabeceras de seguridad ──────────────────────────────────────────────
+<IfModule mod_headers.c>
+  # Evita que el sitio se cargue dentro de un iframe (clickjacking)
+  Header always set X-Frame-Options "DENY"
+
+  # Evita que el navegador adivine tipos MIME
+  Header always set X-Content-Type-Options "nosniff"
+
+  # No filtrar la URL completa a otros sitios
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # Permisos de hardware: cámara habilitada solo para el propio sitio
+  # (la usa el escáner QR); micrófono y geolocalización deshabilitados.
+  Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+
+  # Forzar HTTPS por 1 año (solo tiene efecto sobre conexiones HTTPS)
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+  # CSP: solo recursos propios. 'unsafe-inline' es necesario porque Next
+  # (export estático) inyecta scripts/estilos inline sin nonce.
+  # connect-src permite el API en dysassistance.com.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://dysassistance.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+</IfModule>

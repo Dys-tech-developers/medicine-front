@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
-    "start": "next start",
+    "build:prod": "NEXT_PUBLIC_API_URL=https://dysassistance.com/medicine-back next build",
     "lint": "eslint"
   },
   "dependencies": {

@@ -6,6 +6,11 @@ import { getHistoriaClinicaByPacienteIdWithApi } from "@/lib/api/historias-clini
 
 export type PacienteHistoriaStatus = "yes" | "no" | "error";
 
+type HistoriaStatusResult = {
+  key: string;
+  data: Record<number, PacienteHistoriaStatus>;
+};
+
 /**
  * Indica qué pacientes de la página actual tienen historia clínica (GET por pacienteId).
  */
@@ -15,23 +20,25 @@ export function usePacientesHistoriaStatus(
   refreshNonce = 0
 ) {
   const idsKey = useMemo(() => pacienteIds.join(","), [pacienteIds]);
-  const [statusByPacienteId, setStatusByPacienteId] = useState<
-    Record<number, PacienteHistoriaStatus>
-  >({});
-  const [loading, setLoading] = useState(false);
+  // El resultado guarda la clave de la consulta: si la página cambió,
+  // los datos viejos se descartan por derivación (sin resetear en un efecto).
+  const [result, setResult] = useState<HistoriaStatusResult>({ key: "", data: {} });
+
+  const active = Boolean(accessToken) && idsKey.length > 0;
+  const resultKey = `${idsKey}#${refreshNonce}`;
+  const statusByPacienteId: Record<number, PacienteHistoriaStatus> =
+    active && result.key === resultKey ? result.data : {};
+  const loading = active && result.key !== resultKey;
 
   useEffect(() => {
-    if (!accessToken || pacienteIds.length === 0) {
-      setStatusByPacienteId({});
-      setLoading(false);
-      return;
-    }
+    if (!accessToken || idsKey.length === 0) return;
+    const ids = idsKey.split(",").map(Number);
+    const key = `${idsKey}#${refreshNonce}`;
 
     let cancelled = false;
     void (async () => {
-      setLoading(true);
       const entries = await Promise.all(
-        pacienteIds.map(async (id) => {
+        ids.map(async (id) => {
           try {
             await getHistoriaClinicaByPacienteIdWithApi(accessToken, id);
             return [id, "yes"] as const;
@@ -44,8 +51,7 @@ export function usePacientesHistoriaStatus(
         })
       );
       if (!cancelled) {
-        setStatusByPacienteId(Object.fromEntries(entries));
-        setLoading(false);
+        setResult({ key, data: Object.fromEntries(entries) });
       }
     })();
 

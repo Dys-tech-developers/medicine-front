@@ -3,6 +3,7 @@
 import { AdminNavbar } from "@/components/dashboard/AdminNavbar";
 import { AdminPageBackground } from "@/components/dashboard/AdminPageBackground";
 import { AdminSidebar } from "@/components/dashboard/AdminSidebar";
+import { getAdminRoleLabel } from "@/lib/admin-permissions";
 import { performLogout } from "@/lib/auth/logout";
 import { getAdminSectionLabel } from "@/lib/admin/get-admin-section";
 import { useAuthSession } from "@/lib/hooks/use-auth-session";
@@ -20,9 +21,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const currentSection = getAdminSectionLabel(pathname);
 
-  useEffect(() => {
+  // Cierra el menú móvil al navegar (ajuste de estado durante el render,
+  // patrón recomendado en lugar de setState dentro de un efecto)
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     setMobileNavOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -63,7 +68,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               ? {
                   name: session.name,
                   email: session.email,
-                  role: "Administrador",
+                  role: getAdminRoleLabel(session.roles),
                 }
               : null
           }

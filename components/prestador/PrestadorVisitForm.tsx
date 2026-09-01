@@ -76,9 +76,13 @@ export function PrestadorVisitForm({
 
   useEffect(() => {
     if (modoRelevo || timerInicioMs == null) return;
-    setAhoraMs(Date.now());
+    // Primer sync programado (no sincrónico) y luego un tick por segundo
+    const sync = window.setTimeout(() => setAhoraMs(Date.now()), 0);
     const id = window.setInterval(() => setAhoraMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearTimeout(sync);
+      window.clearInterval(id);
+    };
   }, [timerInicioMs, modoRelevo]);
 
   const sinServiciosActivos = serviciosActivos.length === 0;

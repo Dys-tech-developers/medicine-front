@@ -67,6 +67,25 @@ export type UpdatePrestadorServiciosBody = {
   servicioIds: number[];
 };
 
+/** PATCH /api/v1/prestadores/:id — actualización parcial; omitir un campo lo deja igual. */
+export type UpdatePrestadorBody = {
+  nombre?: string;
+  email?: string;
+  /** Si se omite, la contraseña no cambia. */
+  password?: string;
+  telefono?: string;
+  lugarResidencia?: string;
+  documento?: string;
+  matricula?: string;
+  cuit?: string;
+  cbu?: string;
+  regimenIva?: RegimenIva;
+  /** Estado del prestador (no `usuarioEstado`). */
+  estado?: boolean;
+  /** Reemplaza la lista completa; `[]` deja al prestador sin servicios. Máx. 50, sin duplicados. */
+  servicioIds?: number[];
+};
+
 export type PrestadorEstadoCuentaFinanzasDto = {
   totalGenerado: string;
   pagado: string;
