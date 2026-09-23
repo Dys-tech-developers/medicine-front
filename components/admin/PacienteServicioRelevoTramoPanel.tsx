@@ -24,6 +24,7 @@ import {
   modoEsRelevo,
 } from "@/lib/reglas-asignacion";
 import { VISITA_OBSERVACIONES_MAX } from "@/lib/prestador-visitas";
+import { appendTarifaConflictHint } from "@/lib/servicios-tarifas-labels";
 import { formatVisitaDateTime } from "@/lib/visitas-display";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -48,8 +49,11 @@ type Props = {
 };
 
 function getTramoErrorMessage(err: ApiError): string {
-  if (err.message?.trim()) return err.message.trim();
-  return getApiErrorMessages(err).join(" ");
+  const base = err.message?.trim() || getApiErrorMessages(err).join(" ");
+  if (err.status === 409 && /tarifa/i.test(base)) {
+    return appendTarifaConflictHint(base);
+  }
+  return base;
 }
 
 export function PacienteServicioRelevoTramoPanel({

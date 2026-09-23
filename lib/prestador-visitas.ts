@@ -20,6 +20,7 @@ import {
   modoEsRelevo,
   modoEsVisitaUnica,
 } from "@/lib/reglas-asignacion";
+import { appendTarifaConflictHint } from "@/lib/servicios-tarifas-labels";
 
 export const VISITA_TIEMPO_MIN = 1;
 export const VISITA_TIEMPO_MAX = 720;
@@ -574,10 +575,7 @@ export function getPrestadorVisitaErrorMessage(err: ApiError): string {
       return base;
     }
     if (/tarifa/i.test(base)) {
-      if (/no_habil|no hábil|no habil/i.test(base)) {
-        return `${base} Pedile al administrador que cargue la tarifa no hábil para ese servicio.`;
-      }
-      return `${base} Pedile al administrador que configure las tarifas del servicio en el panel.`;
+      return appendTarifaConflictHint(base);
     }
     return base;
   }

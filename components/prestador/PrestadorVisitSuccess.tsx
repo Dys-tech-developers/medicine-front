@@ -3,7 +3,7 @@
 import { AlertTriangle, CheckCircle2, Package, Plus } from "lucide-react";
 import type { VisitaDetailDto } from "@/lib/api/types";
 import { formatReporteMonto } from "@/lib/reportes-display";
-import { labelTipoDia, MODALIDAD_COBRO_LABELS, TIPO_JORNADA_LABELS } from "@/lib/servicios-tarifas-labels";
+import { labelTipoDia, labelTipoJornada, MODALIDAD_COBRO_LABELS } from "@/lib/servicios-tarifas-labels";
 import { formatVisitaDuracion, formatVisitaFecha } from "@/lib/visitas-display";
 
 type Props = {
@@ -97,7 +97,7 @@ export function PrestadorVisitSuccess({
                 Jornada
               </dt>
               <dd className="mt-0.5 font-semibold text-medical-text">
-                {TIPO_JORNADA_LABELS[visita.finanzas.tipoJornada] ?? visita.finanzas.tipoJornada}
+                {labelTipoJornada(visita.finanzas.tipoJornada)}
               </dd>
             </div>
             <div className="rounded-lg border border-medical-border bg-medical-surface px-3 py-2">

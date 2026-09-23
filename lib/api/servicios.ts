@@ -20,7 +20,7 @@ import type {
   UpdateServicioEstadoBody,
   UpdateServicioTarifaBody,
 } from "@/lib/api/types";
-import { normalizeTipoDia } from "@/lib/servicios-tarifas-labels";
+import { normalizeTipoDia, normalizeTipoJornada } from "@/lib/servicios-tarifas-labels";
 import { normalizeReglasAsignacion } from "@/lib/reglas-asignacion";
 
 function normalizeTarifa(
@@ -30,7 +30,9 @@ function normalizeTarifa(
     id: Number(row.id),
     servicioId: row.servicioId != null ? Number(row.servicioId) : undefined,
     modalidadCobro: (row.modalidadCobro ?? "por_hora") as ModalidadCobro,
-    tipoJornada: (row.tipoJornada ?? "diurno") as ServicioTarifaDto["tipoJornada"],
+    tipoJornada: normalizeTipoJornada(
+      String(row.tipoJornada ?? row.tipo_jornada ?? "diurno")
+    ),
     tipoDia: normalizeTipoDia(String(row.tipoDia ?? row.tipo_dia ?? "habil")),
     valor: String(row.valor ?? ""),
     createdAt: row.createdAt != null ? String(row.createdAt) : undefined,

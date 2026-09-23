@@ -20,10 +20,9 @@ import type {
   PacienteServicioEstado,
   PaginatedPacientesDto,
   PacienteServicioTarifaDto,
-  TipoJornada,
   UpdatePacienteBody,
 } from "@/lib/api/types";
-import { normalizeTipoDia } from "@/lib/servicios-tarifas-labels";
+import { normalizeTipoDia, normalizeTipoJornada } from "@/lib/servicios-tarifas-labels";
 import { normalizeReglasAsignacion } from "@/lib/reglas-asignacion";
 
 type PacienteRaw = Partial<PacienteListItemDto> &
@@ -426,7 +425,7 @@ function normalizePacienteServicioAsignadoQr(
           (t): PacienteServicioTarifaDto => ({
             id: Number(t.id),
             modalidadCobro: String(t.modalidadCobro ?? t.modalidad_cobro) as ModalidadCobro,
-            tipoJornada: String(t.tipoJornada ?? t.tipo_jornada) as TipoJornada,
+            tipoJornada: normalizeTipoJornada(String(t.tipoJornada ?? t.tipo_jornada)),
             tipoDia: normalizeTipoDia(String(t.tipoDia ?? t.tipo_dia)),
             valor: String(t.valor ?? ""),
           })

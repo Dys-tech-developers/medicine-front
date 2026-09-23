@@ -54,6 +54,15 @@ const FIELD_LABELS: Record<string, string> = {
   fechaInicio: "Fecha de inicio",
   fechaFin: "Fecha de fin",
   periodoControl: "Período de control",
+  fecha: "Fecha",
+  titulo: "Título",
+  horaInicioDiurno: "Inicio diurno",
+  horaFinDiurno: "Fin diurno",
+  horaInicioNocturno: "Inicio nocturno",
+  horaFinNocturno: "Fin nocturno",
+  diasHabiles: "Días hábiles",
+  diasNoHabiles: "Días no hábiles",
+  activo: "Activo",
 };
 
 const ZOD_MESSAGE_TRANSLATIONS: Record<string, string> = {

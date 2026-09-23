@@ -13,6 +13,7 @@ import {
 import { usePathname } from "next/navigation";
 import {
   Boxes,
+  CalendarClock,
   DollarSign,
   Building2,
   ClipboardList,
@@ -44,6 +45,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { label: "Servicios", href: "/admin/servicios", icon: Layers },
   { label: "Stock", href: "/admin/stock", icon: Boxes },
   { label: "Liquidación", href: "/admin/reportes/finanzas", icon: DollarSign },
+  { label: "Jornadas y feriados", href: "/admin/configuracion/jornadas", icon: CalendarClock },
   { label: "Configuración", href: "/admin/configuracion", icon: Settings },
 ];
 
@@ -152,7 +154,9 @@ export function AdminSidebar({ mobileOpen = false, onMobileClose }: AdminSidebar
             const isActive =
               href === "/admin"
                 ? pathname === "/admin"
-                : pathname.startsWith(href);
+                : href === "/admin/configuracion"
+                  ? pathname === "/admin/configuracion"
+                  : pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
                 key={label}

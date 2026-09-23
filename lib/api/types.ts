@@ -635,9 +635,65 @@ export type UpdateHistoriaClinicaBody = {
 
 export type ModalidadCobro = "por_servicio" | "por_hora" | "por_dia";
 
-export type TipoJornada = "diurno" | "nocturno";
+/** Jornada de tarifa o de visita. En tarifas puede ser `cualquiera` (todo el día); en finanzas de visita se guarda la jornada real (`diurno`/`nocturno`). */
+export type TipoJornada = "diurno" | "nocturno" | "cualquiera";
 
-export type TipoDia = "habil" | "no_habil";
+export type TipoDia = "habil" | "no_habil" | "feriado" | "cualquiera";
+
+/** Configuración global de jornada laboral (singleton id=1). */
+export type JornadaConfigDto = {
+  id: number;
+  /** HH:mm */
+  horaInicioDiurno: string;
+  horaFinDiurno: string;
+  horaInicioNocturno: string;
+  horaFinNocturno: string;
+  /** 0=domingo … 6=sábado — sin solaparse con diasNoHabiles; juntos cubren 0–6 */
+  diasHabiles: number[];
+  diasNoHabiles: number[];
+  updatedAt: string;
+};
+
+export type UpdateJornadaConfigBody = {
+  horaInicioDiurno?: string;
+  horaFinDiurno?: string;
+  horaInicioNocturno?: string;
+  horaFinNocturno?: string;
+  diasHabiles?: number[];
+  diasNoHabiles?: number[];
+};
+
+export type FeriadoDto = {
+  id: number;
+  /** YYYY-MM-DD */
+  fecha: string;
+  titulo: string;
+  descripcion: string | null;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PaginatedFeriadosDto = {
+  items: FeriadoDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type CreateFeriadoBody = {
+  fecha: string;
+  titulo: string;
+  descripcion?: string | null;
+  activo?: boolean;
+};
+
+export type UpdateFeriadoBody = {
+  fecha?: string;
+  titulo?: string;
+  descripcion?: string | null;
+  activo?: boolean;
+};
 
 export type PacienteServicioEstado = "activa" | "suspendida" | "finalizada";
 

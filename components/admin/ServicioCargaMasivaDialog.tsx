@@ -192,8 +192,11 @@ export function ServicioCargaMasivaDialog({
             <p className="text-sm text-medical-text">
               Usá la planilla descargada desde el sistema (hoja «Servicios»). Repetí el mismo{" "}
               <span className="font-medium">nombre</span> en varias filas para cargar varias tarifas
-              por servicio. En filas adicionales del mismo servicio, descripción, estado, control de
-              horario y modo relevo deben coincidir con la primera fila del grupo. Máximo{" "}
+              por servicio. En columnas de tarifa usá{" "}
+              <span className="font-medium">tipoJornada</span>: diurno | nocturno | cualquiera y{" "}
+              <span className="font-medium">tipoDia</span>: habil | no_habil | feriado | cualquiera.
+              En filas adicionales del mismo servicio, descripción, estado, control de horario y modo
+              relevo deben coincidir con la primera fila del grupo. Máximo{" "}
               {CARGA_MASIVA_SERVICIOS_MAX_FILAS} filas y 5 MB por archivo.
             </p>
             <Button

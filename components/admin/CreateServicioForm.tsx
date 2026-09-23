@@ -24,6 +24,10 @@ import {
   TIPO_JORNADA_LABELS,
   TIPOS_DIA,
   TIPOS_JORNADA,
+  TARIFAS_COBRO_HELP,
+  TARIFAS_FERIADO_WARNING,
+  tarifasCubrenFeriado,
+  validateTarifasJornadaCompatibilidad,
 } from "@/lib/servicios-tarifas-labels";
 import {
   servicioModoVisitaToFlags,
@@ -60,10 +64,38 @@ function newTarifaRow(): TarifaFormRow {
   return {
     key: crypto.randomUUID(),
     modalidadCobro: "por_hora",
-    tipoJornada: "diurno",
-    tipoDia: "habil",
+    tipoJornada: "cualquiera",
+    tipoDia: "cualquiera",
     valor: "",
   };
+}
+
+/** Un solo precio para cualquier jornada y día. */
+function plantillaPrecioUnico(
+  modalidadCobro: ModalidadCobro = "por_hora"
+): TarifaFormRow[] {
+  return [
+    {
+      key: crypto.randomUUID(),
+      modalidadCobro,
+      tipoJornada: "cualquiera",
+      tipoDia: "cualquiera",
+      valor: "",
+    },
+  ];
+}
+
+/** Diferenciar hábil / no hábil / feriado (jornada cualquiera). */
+function plantillaPorTipoDia(
+  modalidadCobro: ModalidadCobro = "por_hora"
+): TarifaFormRow[] {
+  return (["habil", "no_habil", "feriado"] as TipoDia[]).map((tipoDia) => ({
+    key: crypto.randomUUID(),
+    modalidadCobro,
+    tipoJornada: "cualquiera" as const,
+    tipoDia,
+    valor: "",
+  }));
 }
 
 function validateForm(
@@ -84,7 +116,7 @@ function validateForm(
       return `Tarifa ${i + 1}: ingresá un valor mayor a 0.`;
     }
   }
-  return null;
+  return validateTarifasJornadaCompatibilidad(tarifas);
 }
 
 function toPayload(
@@ -145,12 +177,22 @@ export function CreateServicioForm({
     setTarifas((rows) => [...rows, newTarifaRow()]);
   }, []);
 
+  const applyPlantillaPrecioUnico = useCallback(() => {
+    setTarifas(plantillaPrecioUnico("por_hora"));
+  }, []);
+
+  const applyPlantillaPorTipoDia = useCallback(() => {
+    setTarifas(plantillaPorTipoDia("por_hora"));
+  }, []);
+
   const removeTarifa = useCallback((key: string) => {
     setTarifas((rows) => {
       if (rows.length <= 1) return rows;
       return rows.filter((r) => r.key !== key);
     });
   }, []);
+
+  const cubreFeriado = tarifasCubrenFeriado(tarifas);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,18 +310,42 @@ export function CreateServicioForm({
               <legend className="text-sm font-semibold text-medical-text">
                 Tarifas <span className="text-medical-danger">*</span>
               </legend>
-              <button
-                type="button"
-                onClick={addTarifa}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-medical-primary/25 bg-medical-secondary/50 px-3 py-2 text-sm font-medium text-medical-primary hover:bg-medical-secondary"
-              >
-                <Plus className="h-4 w-4" />
-                Agregar tarifa
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={applyPlantillaPrecioUnico}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-medical-border bg-white px-3 py-2 text-sm font-medium text-medical-text hover:bg-medical-surface"
+                >
+                  Un solo precio
+                </button>
+                <button
+                  type="button"
+                  onClick={applyPlantillaPorTipoDia}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-medical-border bg-white px-3 py-2 text-sm font-medium text-medical-text hover:bg-medical-surface"
+                >
+                  Hábil / no hábil / feriado
+                </button>
+                <button
+                  type="button"
+                  onClick={addTarifa}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-medical-primary/25 bg-medical-secondary/50 px-3 py-2 text-sm font-medium text-medical-primary hover:bg-medical-secondary"
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar tarifa
+                </button>
+              </div>
             </div>
             <p className="text-xs text-medical-mutedText">
-              Incluí al menos una tarifa. Podés combinar jornada, tipo de día y modalidad de cobro.
+              «Cualquiera» en jornada o día actúa como comodín (fallback). Podés combinar
+              tarifas específicas con cualquiera. Un solo precio = jornada cualquiera + día
+              cualquiera.
             </p>
+            <p className="text-xs text-medical-mutedText">{TARIFAS_COBRO_HELP}</p>
+            {!cubreFeriado ? (
+              <p className="rounded-xl border border-medical-warning/35 bg-medical-warning/10 px-3 py-2 text-xs text-medical-text">
+                {TARIFAS_FERIADO_WARNING}
+              </p>
+            ) : null}
 
             <div className="space-y-4">
               {tarifas.map((tarifa, index) => (

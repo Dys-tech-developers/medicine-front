@@ -10,8 +10,8 @@ import type { UpdateVisitaFinanzasBody, VisitaDetailDto, VisitaFinanzasDto } fro
 import { formatReporteMonto } from "@/lib/reportes-display";
 import {
   labelTipoDia,
+  labelTipoJornada,
   MODALIDAD_COBRO_LABELS,
-  TIPO_JORNADA_LABELS,
 } from "@/lib/servicios-tarifas-labels";
 import { getVisitaFinanzasEstadoLabel, VISITA_FINANZAS_UI } from "@/lib/visita-finanzas-labels";
 import {
@@ -85,7 +85,7 @@ export function VisitaFinanzasAdminPanel({
         <div className="flex flex-col gap-1 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
           <span className="text-xs font-medium text-medical-mutedText">Jornada</span>
           <span className="text-sm font-medium text-medical-text">
-            {TIPO_JORNADA_LABELS[finanzas.tipoJornada] ?? finanzas.tipoJornada}
+            {labelTipoJornada(finanzas.tipoJornada)}
           </span>
         </div>
         <div className="flex flex-col gap-1 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">

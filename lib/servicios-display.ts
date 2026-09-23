@@ -9,8 +9,8 @@ import { formatPacienteServicioFrecuencia } from "@/lib/paciente-servicio-displa
 import { asignacionEstadoBadgeClass as asignacionEstadoBadgeClassUi } from "@/lib/medical-ui-classes";
 import {
   labelTipoDia,
+  labelTipoJornada,
   MODALIDAD_COBRO_LABELS,
-  TIPO_JORNADA_LABELS,
 } from "@/lib/servicios-tarifas-labels";
 
 export function getServicioPacientesCount(servicio: ServicioConTarifasDto): number {
@@ -73,7 +73,9 @@ export function formatTarifaValor(valor: string): string {
 export function formatTarifaContexto(
   tarifa: Pick<ServicioTarifaDto, "tipoJornada" | "tipoDia" | "modalidadCobro">
 ): string {
-  return `${TIPO_JORNADA_LABELS[tarifa.tipoJornada]} · ${labelTipoDia(tarifa.tipoDia)} · ${MODALIDAD_COBRO_LABELS[tarifa.modalidadCobro]}`;
+  const jornada = labelTipoJornada(tarifa.tipoJornada);
+  const modalidad = MODALIDAD_COBRO_LABELS[tarifa.modalidadCobro] ?? tarifa.modalidadCobro;
+  return `${jornada} · ${labelTipoDia(tarifa.tipoDia)} · ${modalidad}`;
 }
 
 /** Una línea para la celda compacta de la tabla (rango de valores si hay varias). */

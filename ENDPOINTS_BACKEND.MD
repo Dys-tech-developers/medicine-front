@@ -183,6 +183,13 @@ Base URL: `http://localhost:<PORT>`
 | POST   | `/api/v1/obras-sociales`                          | Bearer | ADMIN                      | Alta (`nombre`, `codigo`, `estado`).                                                  |
 | PATCH  | `/api/v1/obras-sociales/:id`                      | Bearer | ADMIN                      | Actualización parcial.                                                                |
 | DELETE | `/api/v1/obras-sociales/:id`                      | Bearer | ADMIN                      | Baja (falla si tiene pacientes).                                                      |
+| GET    | `/api/v1/config/jornada`                          | Bearer | ADMIN, OPERADOR, PRESTADOR | Config global: franjas diurno/nocturno + días hábiles/no hábiles.                     |
+| PATCH  | `/api/v1/config/jornada`                          | Bearer | ADMIN                      | Actualización parcial de jornada (horarios y días).                                   |
+| GET    | `/api/v1/feriados`                                | Bearer | ADMIN, OPERADOR, PRESTADOR | Listado paginado (`page`, `pageSize`, `desde`, `hasta`, `activo`).                    |
+| GET    | `/api/v1/feriados/:id`                            | Bearer | ADMIN, OPERADOR, PRESTADOR | Detalle de feriado.                                                                   |
+| POST   | `/api/v1/feriados`                                | Bearer | ADMIN                      | Alta (`fecha`, `titulo`, `descripcion?`, `activo?`). 409 si la fecha ya existe.       |
+| PATCH  | `/api/v1/feriados/:id`                            | Bearer | ADMIN                      | Actualización parcial.                                                                |
+| DELETE | `/api/v1/feriados/:id`                            | Bearer | ADMIN                      | Baja real del feriado.                                                                |
 | GET    | `/api/v1/pacientes`                               | Bearer | ADMIN, OPERADOR, PRESTADOR | Listado paginado (`page`, `pageSize`).                                                |
 | POST   | `/api/v1/pacientes`                               | Bearer | ADMIN, OPERADOR            | Alta con `obraSocialId`; genera `codigoQr` y `qrDataUrl`.                             |
 | GET    | `/api/v1/pacientes/:id`                           | Bearer | ADMIN, OPERADOR, PRESTADOR | Detalle + QR + `servicios` asignados con `tarifas` por modalidad.                     |
@@ -257,8 +264,8 @@ Todas las respuestas exitosas usan `{ "success": true, "data": … }`. Los tipos
 | `modalidadCobro`                        | `por_servicio`, `por_hora`, `por_dia`       |
 | `frecuenciaTipo`                        | `diaria`, `semanal`, `mensual`, `por_horas` |
 | `estado` (asignación paciente↔servicio) | `activa`, `suspendida`, `finalizada`        |
-| `tipoJornada` (tarifa)                  | `diurno`, `nocturno`                        |
-| `tipoDia` (tarifa)                      | `habil`, `sabado`, `domingo`, `feriado`     |
+| `tipoJornada` (tarifa)                  | `diurno`, `nocturno`, `cualquiera`                    |
+| `tipoDia` (tarifa)                      | `habil`, `no_habil`, `feriado`, `cualquiera`          |
 | `sexo` (paciente)                       | `M`, `F`, `X`                               |
 
 
@@ -360,6 +367,38 @@ Query: `page`, `pageSize`, `search`, `estado`.
 #### `GET /api/v1/obras-sociales/:id`
 
 `data`: mismo objeto que un ítem del listado.
+
+---
+
+### Configuración de jornada
+
+#### `GET /api/v1/config/jornada` · `PATCH /api/v1/config/jornada`
+
+`data` (singleton `id: 1`):
+
+| Campo | Tipo | Notas |
+| --- | --- | --- |
+| `horaInicioDiurno`, `horaFinDiurno` | string `HH:mm` | Franja diurna |
+| `horaInicioNocturno`, `horaFinNocturno` | string `HH:mm` | Franja nocturna |
+| `diasHabiles` | `number[]` | 0=Dom … 6=Sáb |
+| `diasNoHabiles` | `number[]` | Complemento sin solapes; juntos cubren 0–6 |
+| `updatedAt` | string | ISO |
+
+PATCH body parcial (≥1 campo): mismos campos de horarios/días.
+
+---
+
+### Feriados
+
+#### `GET /api/v1/feriados`
+
+Query: `page`, `pageSize`, `desde` (`YYYY-MM-DD`), `hasta`, `activo`.
+
+`data`: **Paginado**; cada ítem: `id`, `fecha`, `titulo`, `descripcion`, `activo`, `createdAt`, `updatedAt`.
+
+#### `GET /api/v1/feriados/:id` · `POST` · `PATCH /:id` · `DELETE /:id`
+
+POST body: `{ fecha, titulo, descripcion?, activo? }`. PATCH parcial. **409** si ya existe un feriado para esa `fecha`.
 
 ---
 
@@ -597,7 +636,7 @@ Cada ítem de `insumos`: `id`, `insumoId`, `cantidad`, `insumoNombre`, `insumoCo
 
 Body: `pacienteServicioId`, `fechaInicio` (ISO), `tiempoMinutos` (1–720), `observaciones` (opcional), `fechaFin` (opcional; si se omite se calcula desde `fechaInicio` + `tiempoMinutos`), `prestadorId` (solo ADMIN, obligatorio para admin).
 
-Al crear la visita se genera automáticamente un registro en `visita_finanzas`: se toma la `modalidadCobro` de la asignación, se resuelven `tipoJornada` / `tipoDia` según `fechaInicio`, se busca la tarifa del servicio y se calcula `valorAplicado` (`por_hora`: unitario × minutos/60; `por_servicio` / `por_dia`: unitario).
+Al crear la visita se genera automáticamente un registro en `visita_finanzas`: se toma la `modalidadCobro` de la asignación, se resuelven `tipoJornada` / `tipoDia` según config de jornada + feriados activos y `fechaInicio` (feriado activo → `feriado`; día fuera de `diasHabiles` → `no_habil`; si no → `habil`; jornada según franjas diurno/nocturno). Se busca la tarifa del servicio con prioridad: exacta → día exacto + jornada `cualquiera` → jornada exacta + día `cualquiera` → ambos `cualquiera`. Si no hay match, falla el cobro (conflicto). `valorAplicado`: `por_hora` = unitario × minutos/60; `por_servicio` / `por_dia` = unitario.
 
 #### `PATCH /api/v1/visitas/:id/finanzas`
 

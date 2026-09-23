@@ -14,7 +14,6 @@ import type {
   GestionarTramoAdminResultDto,
   ModalidadCobro,
   PaginatedVisitasDto,
-  TipoJornada,
   UpdateVisitaBody,
   UpdateVisitaFinanzasBody,
   VisitaDetailDto,
@@ -26,7 +25,7 @@ import type {
   VisitaPendienteDto,
   VisitaPrestadorResumenDto,
 } from "@/lib/api/types";
-import { normalizeTipoDia } from "@/lib/servicios-tarifas-labels";
+import { normalizeTipoDia, normalizeTipoJornada } from "@/lib/servicios-tarifas-labels";
 import { parseVisitaEstado } from "@/lib/visita-estado-labels";
 
 export type ListVisitasOptions = {
@@ -112,7 +111,7 @@ function normalizeFinanzas(
   }
   return {
     modalidadCobro: String(row.modalidadCobro ?? row.modalidad_cobro ?? "por_servicio") as ModalidadCobro,
-    tipoJornada: String(row.tipoJornada ?? row.tipo_jornada ?? "diurno") as TipoJornada,
+    tipoJornada: normalizeTipoJornada(String(row.tipoJornada ?? row.tipo_jornada ?? "diurno")),
     tipoDia: normalizeTipoDia(String(row.tipoDia ?? row.tipo_dia ?? "habil")),
     valorUnitario: String(row.valorUnitario ?? row.valor_unitario ?? "0"),
     valorAplicado: String(valorAplicado ?? "0"),

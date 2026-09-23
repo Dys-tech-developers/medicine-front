@@ -29,6 +29,11 @@ export function canManageUsers(roles: string[]): boolean {
   return isAdmin(roles);
 }
 
+/** PATCH /config/jornada y CRUD /feriados es solo ADMIN. OPERADOR puede consultar. */
+export function canManageJornadasFeriados(roles: string[]): boolean {
+  return isAdmin(roles);
+}
+
 export function getAdminRoleLabel(roles: string[]): string {
   return isAdmin(roles) ? "Administrador" : "Operador";
 }

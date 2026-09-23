@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { KeyRound, Settings, UserCircle2, Users } from "lucide-react";
+import { CalendarClock, KeyRound, Settings, UserCircle2, Users } from "lucide-react";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 import { UserProfileForm } from "@/components/account/UserProfileForm";
 import { UsersDirectoryPanel } from "@/components/admin/UsersDirectoryPanel";
@@ -74,6 +75,22 @@ export default function AdminConfiguracionPage() {
             </p>
           </div>
         </div>
+
+        <Link
+          href="/admin/configuracion/jornadas"
+          className="flex items-center gap-3 rounded-2xl border border-medical-border bg-medical-card p-4 shadow-sm transition hover:border-medical-primary/40 hover:bg-medical-secondary/40"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-medical-primary/10 text-medical-primary">
+            <CalendarClock className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-medical-text">Jornadas y feriados</p>
+            <p className="text-sm text-medical-mutedText">
+              Franja diurna/nocturna, días hábiles/no hábiles y calendario de feriados para
+              liquidación.
+            </p>
+          </div>
+        </Link>
 
         <div className="flex flex-wrap gap-2">
           {visibleTabs.map(({ id, label, icon: Icon }) => (

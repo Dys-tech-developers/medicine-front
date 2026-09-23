@@ -38,7 +38,11 @@ import {
   TIPO_JORNADA_LABELS,
   TIPOS_DIA,
   TIPOS_JORNADA,
+  TARIFAS_COBRO_HELP,
+  TARIFAS_FERIADO_WARNING,
   normalizeTipoDia,
+  tarifasCubrenFeriado,
+  validateTarifasJornadaCompatibilidad,
 } from "@/lib/servicios-tarifas-labels";
 import { Button } from "@/components/ui/button";
 import { ServicioModoVisitaSelector } from "@/components/admin/ServicioModoVisitaSelector";
@@ -68,8 +72,8 @@ type TarifaFormState = {
 function defaultTarifaForm(): TarifaFormState {
   return {
     modalidadCobro: "por_hora",
-    tipoJornada: "diurno",
-    tipoDia: "habil",
+    tipoJornada: "cualquiera",
+    tipoDia: "cualquiera",
     valor: "",
   };
 }
@@ -253,12 +257,25 @@ export function ServicioEditDialog({
       setError("Ingresá un valor mayor a 0.");
       return null;
     }
-    return {
+    const candidate = {
       modalidadCobro: tarifaForm.modalidadCobro,
       tipoJornada: tarifaForm.tipoJornada,
       tipoDia: tarifaForm.tipoDia,
       valor,
     };
+    const otras = tarifas
+      .filter((t) => (editingTarifaId != null ? t.id !== editingTarifaId : true))
+      .map((t) => ({
+        modalidadCobro: t.modalidadCobro,
+        tipoJornada: t.tipoJornada,
+        tipoDia: normalizeTipoDia(t.tipoDia),
+      }));
+    const compatError = validateTarifasJornadaCompatibilidad([...otras, candidate]);
+    if (compatError) {
+      setError(compatError);
+      return null;
+    }
+    return candidate;
   };
 
   const handleCreateTarifa = async () => {
@@ -433,6 +450,16 @@ export function ServicioEditDialog({
                 </Button>
               ) : null}
             </div>
+            <p className="mb-3 text-xs text-medical-mutedText">
+              «Cualquiera» en jornada o día es comodín (fallback). Podés tener tarifas específicas
+              y también cualquiera. Un solo precio para todo = jornada cualquiera + día cualquiera.
+            </p>
+            <p className="mb-3 text-xs text-medical-mutedText">{TARIFAS_COBRO_HELP}</p>
+            {!tarifasCubrenFeriado(tarifas) ? (
+              <p className="mb-3 rounded-xl border border-medical-warning/35 bg-medical-warning/10 px-3 py-2 text-xs text-medical-text">
+                {TARIFAS_FERIADO_WARNING}
+              </p>
+            ) : null}
             {tarifas.length === 0 && !addingTarifa ? (
               <p className="text-sm text-medical-mutedText">
                 Este servicio no tiene tarifas. Agregá al menos una para liquidar visitas.
