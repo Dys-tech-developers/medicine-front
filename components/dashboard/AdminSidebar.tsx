@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth-session";
 import { usePathname } from "next/navigation";
 import {
+  Banknote,
   Boxes,
   CalendarClock,
   DollarSign,
@@ -43,6 +44,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { label: "Pacientes", href: "/admin/pacientes", icon: User },
   { label: "Obras sociales", href: "/admin/obras-sociales", icon: Building2 },
   { label: "Servicios", href: "/admin/servicios", icon: Layers },
+  { label: "Tarifas", href: "/admin/tarifas", icon: Banknote },
   { label: "Stock", href: "/admin/stock", icon: Boxes },
   { label: "Liquidación", href: "/admin/reportes/finanzas", icon: DollarSign },
   { label: "Jornadas y feriados", href: "/admin/configuracion/jornadas", icon: CalendarClock },

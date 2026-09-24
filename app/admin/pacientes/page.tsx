@@ -60,6 +60,15 @@ const primaryButtonClass =
 const headerOutlineButtonClass =
   "cursor-pointer border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white";
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 export default function AdminPacientesPage() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [ready, setReady] = useState(false);
@@ -78,6 +87,7 @@ export default function AdminPacientesPage() {
   const [downloadingPlantilla, setDownloadingPlantilla] = useState(false);
   const [exportingList, setExportingList] = useState(false);
   const { toasts, showToast, dismiss } = useToast(4000);
+  const debouncedSearch = useDebouncedValue(searchQuery, 350);
 
   const bumpHistoriaStatus = useCallback(() => {
     setHistoriaStatusKey((k) => k + 1);
@@ -93,11 +103,21 @@ export default function AdminPacientesPage() {
     setReady(true);
   }, []);
 
+  const hasDirectoryFilters = hasActivePacientesDirectoryFilters(directoryFilters);
+  const isFiltering =
+    hasDirectoryFilters || debouncedSearch.trim().length > 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, directoryFilters, pageSize]);
+
   const { items, total, loading, error, refresh } = usePacientesList({
     accessToken: session?.accessToken ?? null,
     enabled: Boolean(session),
     page,
     pageSize,
+    /** Con búsqueda/filtros hay que mirar todo el catálogo, no solo la página actual. */
+    fetchAll: isFiltering,
   });
 
   const { obrasSociales, loadingOptions, optionsError } = usePacientesDirectoryFilterOptions(
@@ -162,37 +182,40 @@ export default function AdminPacientesPage() {
 
   const isListView = view === "lista";
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
-  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const rangeEnd = Math.min(page * pageSize, total);
-
   const filteredItems = useMemo(
     () =>
       items.filter(
         (row) =>
           matchesPacienteDirectoryFilters(row, directoryFilters) &&
-          matchesPacienteSearch(row, searchQuery)
+          matchesPacienteSearch(row, debouncedSearch)
       ),
-    [items, directoryFilters, searchQuery]
+    [items, directoryFilters, debouncedSearch]
   );
 
-  const hasDirectoryFilters = hasActivePacientesDirectoryFilters(directoryFilters);
-  const isFiltering = hasDirectoryFilters || searchQuery.trim().length > 0;
+  const displayTotal = isFiltering ? filteredItems.length : total;
+  const totalPages = Math.max(1, Math.ceil(displayTotal / pageSize) || 1);
+  const safePage = Math.min(page, totalPages);
+  const rangeStart = displayTotal === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, displayTotal);
+
+  const pagedItems = useMemo(() => {
+    if (!isFiltering) return filteredItems;
+    const start = (safePage - 1) * pageSize;
+    return filteredItems.slice(start, start + pageSize);
+  }, [isFiltering, filteredItems, safePage, pageSize]);
 
   const paginationHint = useMemo(() => {
     if (loading) return "Cargando…";
     if (isFiltering) {
-      return filteredItems.length === 0
-        ? "Sin coincidencias en esta página."
-        : `${filteredItems.length} resultado${filteredItems.length === 1 ? "" : "s"} en esta página`;
+      if (displayTotal === 0) return "Sin coincidencias.";
+      return `Mostrando ${rangeStart}–${rangeEnd} de ${displayTotal} resultado${displayTotal === 1 ? "" : "s"}`;
     }
-    if (total === 0) return "Sin registros.";
-    return `Mostrando ${rangeStart}–${rangeEnd} de ${total}`;
-  }, [loading, isFiltering, filteredItems.length, total, rangeStart, rangeEnd]);
+    if (displayTotal === 0) return "Sin registros.";
+    return `Mostrando ${rangeStart}–${rangeEnd} de ${displayTotal}`;
+  }, [loading, isFiltering, displayTotal, rangeStart, rangeEnd]);
 
   const handlePageSizeChange = (next: string) => {
     setPageSize(Number(next));
-    setPage(1);
   };
 
   const handleDownloadPlantilla = useCallback(async () => {
@@ -397,9 +420,9 @@ export default function AdminPacientesPage() {
                       type="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Buscar en esta página…"
+                      placeholder="Buscar por nombre, documento, QR…"
                       disabled={loading}
-                      aria-label="Buscar pacientes en esta página"
+                      aria-label="Buscar pacientes"
                       className="h-10 border-medical-border/80 bg-background pl-9 text-sm shadow-sm"
                     />
                   </div>
@@ -494,7 +517,7 @@ export default function AdminPacientesPage() {
             <CardContent className="p-0">
               <PacientesDirectoryTable
                 items={items}
-                filteredItems={filteredItems}
+                filteredItems={pagedItems}
                 loading={loading}
                 error={error}
                 onRetry={refresh}
@@ -532,7 +555,7 @@ export default function AdminPacientesPage() {
               />
             </CardContent>
 
-            {!loading && !error && items.length > 0 && !isFiltering ? (
+            {!loading && !error && displayTotal > 0 ? (
               <CardFooter className="flex-col gap-4 border-t border-medical-border/80 bg-medical-surface/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-5">
                 <p className="text-sm text-medical-mutedText">{paginationHint}</p>
                 <div className="flex items-center gap-3">
@@ -540,23 +563,23 @@ export default function AdminPacientesPage() {
                     type="button"
                     variant="outline"
                     size="default"
-                    className="border-medical-border/80 cursor-pointer"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="cursor-pointer border-medical-border/80"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
                   >
                     <ChevronLeft className="size-4" />
                     Anterior
                   </Button>
                   <span className="min-w-24 px-1 text-center text-sm font-medium text-medical-text">
-                    Página {page} de {totalPages}
+                    Página {safePage} de {totalPages}
                   </span>
                   <Button
                     type="button"
                     variant="outline"
                     size="default"
-                    className="border-medical-border/80 cursor-pointer"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="cursor-pointer border-medical-border/80"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
                   >
                     Siguiente
                     <ChevronRight className="size-4" />

@@ -572,7 +572,7 @@ export function PacientesDirectoryTable({
         <EmptyState
           icon={Search}
           title="Sin coincidencias"
-          description="Probá con otro término o navegá a otra página del listado."
+          description="Probá con otro nombre, documento, QR u obra social."
         />
       </div>
     );

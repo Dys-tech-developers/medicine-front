@@ -203,6 +203,27 @@ export async function updateServicioWithApi(
   };
 }
 
+export async function listServicioTarifasWithApi(
+  token: string,
+  servicioId: number
+): Promise<ServicioTarifaDto[]> {
+  const data = await apiFetch<ServicioTarifaDto[] | { items?: ServicioTarifaDto[] }>(
+    `/api/v1/servicios/${servicioId}/tarifas`,
+    {
+      method: "GET",
+      token,
+    }
+  );
+  const rows = Array.isArray(data) ? data : (data.items ?? []);
+  return rows.map((row) =>
+    normalizeTarifa({
+      ...(row as Partial<ServicioTarifaDto> & Record<string, unknown>),
+      servicioId:
+        (row as Partial<ServicioTarifaDto>).servicioId ?? servicioId,
+    })
+  );
+}
+
 export async function createServicioTarifaWithApi(
   token: string,
   servicioId: number,
@@ -216,7 +237,10 @@ export async function createServicioTarifaWithApi(
       body: JSON.stringify(body),
     }
   );
-  return normalizeTarifa(data as Partial<ServicioTarifaDto> & Record<string, unknown>);
+  return normalizeTarifa({
+    ...(data as Partial<ServicioTarifaDto> & Record<string, unknown>),
+    servicioId: data.servicioId ?? servicioId,
+  });
 }
 
 export async function updateServicioTarifaWithApi(
@@ -233,7 +257,21 @@ export async function updateServicioTarifaWithApi(
       body: JSON.stringify(body),
     }
   );
-  return normalizeTarifa(data as Partial<ServicioTarifaDto> & Record<string, unknown>);
+  return normalizeTarifa({
+    ...(data as Partial<ServicioTarifaDto> & Record<string, unknown>),
+    servicioId: data.servicioId ?? servicioId,
+  });
+}
+
+export async function deleteServicioTarifaWithApi(
+  token: string,
+  servicioId: number,
+  tarifaId: number
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/servicios/${servicioId}/tarifas/${tarifaId}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 export async function refreshServicioWithApi(

@@ -80,20 +80,27 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       headers: buildRequestHeaders(token, headers),
     });
   } catch (error) {
+    const apiBase = getApiBaseUrl();
     const frontOnNgrok =
       typeof window !== "undefined" && window.location.hostname.includes("ngrok");
     const apiIsLocal =
-      getApiBaseUrl().includes("localhost") || getApiBaseUrl().includes("127.0.0.1");
+      apiBase.includes("localhost") || apiBase.includes("127.0.0.1");
+    const apiIsProdHost = /dysassistance\.com|medicine-back/i.test(apiBase);
 
-    let hint = isNgrokBackend()
-      ? " Revisá que el túnel ngrok del backend (medicine-back) esté activo y NEXT_PUBLIC_API_URL en .env.local."
-      : " Revisá que medicine-back esté corriendo en el puerto 3001.";
-
+    let hint: string;
     if (frontOnNgrok && apiIsLocal) {
       hint =
         " Abrís el front por ngrok pero el API apunta a localhost: desde el celular eso no funciona. Poné en .env.local la URL ngrok del BACK (puerto 3001), no localhost.";
-    } else if (!isNgrokBackend()) {
-      hint += " NEXT_PUBLIC_API_URL debe ser http://localhost:3001 (sin barra final).";
+    } else if (apiIsLocal) {
+      hint =
+        " El build apunta a un API local. En producción rebuildá con `npm run build:prod` (API = https://dysassistance.com/medicine-back).";
+    } else if (isNgrokBackend()) {
+      hint =
+        " Revisá que el túnel ngrok del backend (medicine-back) esté activo y NEXT_PUBLIC_API_URL.";
+    } else if (apiIsProdHost) {
+      hint = ` No se alcanzó ${apiBase}. Revisá CORS del backend, el proxy /medicine-back y que el API esté arriba.`;
+    } else {
+      hint = ` URL del API: ${apiBase}. Revisá NEXT_PUBLIC_API_URL del build y conectividad/CORS.`;
     }
 
     const message =

@@ -51,12 +51,14 @@ export function useServiciosList({
       const merged: ServicioConTarifasDto = {
         ...(previous ?? ({} as ServicioConTarifasDto)),
         ...servicio,
-        tarifas: servicio.tarifas?.length
-          ? servicio.tarifas
-          : (previous?.tarifas ?? []),
-        pacientes: servicio.pacientes?.length
-          ? servicio.pacientes
-          : (previous?.pacientes ?? []),
+        tarifas:
+          servicio.tarifas != null
+            ? servicio.tarifas
+            : (previous?.tarifas ?? []),
+        pacientes:
+          servicio.pacientes != null
+            ? servicio.pacientes
+            : (previous?.pacientes ?? []),
       };
       if (idx === -1) {
         next.push(merged);
