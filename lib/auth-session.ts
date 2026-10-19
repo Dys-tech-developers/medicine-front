@@ -2,6 +2,30 @@ import type { AuthResponseDto } from "@/lib/api/types";
 
 export const AUTH_SESSION_STORAGE_KEY = "medicine.auth.session";
 
+/** Flag en sessionStorage: el login muestra aviso de sesión vencida una sola vez. */
+export const AUTH_SESSION_EXPIRED_NOTICE_KEY = "medicine.auth.session.expired";
+
+export function markAuthSessionExpiredNotice(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(AUTH_SESSION_EXPIRED_NOTICE_KEY, "1");
+  } catch {
+    // sessionStorage puede fallar en modo privado estricto; el redirect igual ocurre.
+  }
+}
+
+/** Lee y limpia el aviso; true si hay que mostrarlo. */
+export function consumeAuthSessionExpiredNotice(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const value = sessionStorage.getItem(AUTH_SESSION_EXPIRED_NOTICE_KEY);
+    if (value) sessionStorage.removeItem(AUTH_SESSION_EXPIRED_NOTICE_KEY);
+    return value === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Rol usado por rutas del frontend */
 export type AppRole = "admin" | "prestador";
 

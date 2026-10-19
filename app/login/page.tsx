@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SimecLogo } from "@/components/brand/SimecLogo";
 import {
   ArrowRight,
   Eye,
   EyeOff,
+  Info,
   Loader2,
   Lock,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import { getApiErrorMessages } from "@/lib/api/format-api-error";
 import { loginWithApi } from "@/lib/api/auth";
 import {
   buildAuthSessionFromLogin,
+  consumeAuthSessionExpiredNotice,
   getRedirectPathForRole,
   saveAuthSession,
 } from "@/lib/auth-session";
@@ -24,7 +26,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setSessionExpiredNotice(consumeAuthSessionExpiredNotice());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +143,18 @@ export default function LoginPage() {
                 Iniciá sesión para continuar con tu espacio de trabajo.
               </p>
             </div>
+
+            {sessionExpiredNotice ? (
+              <div
+                role="status"
+                className="mb-5 flex items-start gap-3 rounded-2xl border border-medical-primary/20 bg-medical-primary/8 px-4 py-3"
+              >
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-medical-primary" aria-hidden="true" />
+                <p className="text-sm font-medium text-medical-text">
+                  Tu sesión expiró. Volvé a iniciar sesión para continuar.
+                </p>
+              </div>
+            ) : null}
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>

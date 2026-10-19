@@ -1,7 +1,7 @@
 import { buildApiUrl, getApiBaseUrl, isNgrokBackend } from "@/lib/api/config";
 import { refreshAuthSession } from "@/lib/api/refresh-session";
 import type { ApiFailure, ApiResponse } from "@/lib/api/types";
-import { clearAuthSession } from "@/lib/auth-session";
+import { clearAuthSession, markAuthSessionExpiredNotice } from "@/lib/auth-session";
 import { invalidateAdminListCache } from "@/lib/cache/admin-list-cache";
 
 export class ApiError extends Error {
@@ -40,6 +40,7 @@ export function handleSessionExpired(): void {
   if (typeof window === "undefined") return;
   clearAuthSession();
   invalidateAdminListCache();
+  markAuthSessionExpiredNotice();
   if (!window.location.pathname.startsWith("/login")) {
     window.location.assign("/login");
   }
