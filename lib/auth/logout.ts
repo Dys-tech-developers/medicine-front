@@ -9,7 +9,7 @@ export async function performLogout(): Promise<void> {
 
   if (session?.accessToken) {
     try {
-      await logoutWithApi(session.accessToken);
+      await logoutWithApi(session.accessToken, session.refreshToken || undefined);
     } catch (error) {
       console.warn("[logout] no se pudo cerrar sesión en el servidor:", error);
     }

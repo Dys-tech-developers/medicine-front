@@ -7,6 +7,8 @@ export type AppRole = "admin" | "prestador";
 
 export type AuthSession = {
   accessToken: string;
+  /** Presente desde login con backends que emiten refresh; vacío en sesiones legacy. */
+  refreshToken: string;
   userId: number;
   email: string;
   name: string;
@@ -33,6 +35,7 @@ export function buildAuthSessionFromLogin(data: AuthResponseDto): AuthSession {
 
   return {
     accessToken: data.accessToken,
+    refreshToken: data.refreshToken ?? "",
     userId: data.user.id,
     email: data.user.email,
     name: data.user.nombre,
@@ -44,7 +47,23 @@ export function buildAuthSessionFromLogin(data: AuthResponseDto): AuthSession {
 
 export function saveAuthSession(session: AuthSession): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(session));
+  const raw = JSON.stringify(session);
+  localStorage.setItem(AUTH_SESSION_STORAGE_KEY, raw);
+  sessionCacheRaw = raw;
+  sessionCacheValue = session;
+}
+
+/** Actualiza tokens tras un refresh exitoso y notifica a los listeners. */
+export function updateAuthSessionTokens(
+  accessToken: string,
+  refreshToken: string
+): AuthSession | null {
+  const current = loadAuthSession();
+  if (!current) return null;
+  const next: AuthSession = { ...current, accessToken, refreshToken };
+  saveAuthSession(next);
+  dispatchAuthSessionUpdated();
+  return next;
 }
 
 /** Normaliza sesiones guardadas con el nombre de rol anterior (`operador`). */
@@ -73,7 +92,11 @@ export function loadAuthSession(): AuthSession | null {
       const parsed = JSON.parse(raw) as AuthSession;
       const role = normalizeStoredRole(parsed.role);
       if (parsed.accessToken && role && parsed.email) {
-        value = { ...parsed, role };
+        value = {
+          ...parsed,
+          role,
+          refreshToken: typeof parsed.refreshToken === "string" ? parsed.refreshToken : "",
+        };
       }
     }
     sessionCacheRaw = raw;
@@ -87,6 +110,8 @@ export function loadAuthSession(): AuthSession | null {
 export function clearAuthSession(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+  sessionCacheRaw = null;
+  sessionCacheValue = null;
 }
 
 export const AUTH_SESSION_UPDATED_EVENT = "medicine.auth.session.updated";

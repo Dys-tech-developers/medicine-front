@@ -75,10 +75,14 @@ export async function resetPasswordWithApi(
   });
 }
 
-export async function logoutWithApi(token: string): Promise<{ message: string }> {
+export async function logoutWithApi(
+  token: string,
+  refreshToken?: string
+): Promise<{ message: string }> {
   return apiFetch<{ message: string }>("/api/v1/auth/logout", {
     method: "POST",
     token,
+    body: JSON.stringify(refreshToken ? { refreshToken } : {}),
   });
 }
 

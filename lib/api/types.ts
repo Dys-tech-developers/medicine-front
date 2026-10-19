@@ -25,6 +25,7 @@ export type UserPublicDto = {
 
 export type AuthResponseDto = {
   accessToken: string;
+  refreshToken: string;
   user: UserPublicDto;
 };
 

@@ -1,16 +1,6 @@
-import { ApiError, handleSessionExpired } from "@/lib/api/client";
-import { buildApiUrl, isNgrokBackend } from "@/lib/api/config";
+import { ApiError, fetchWithBearerAuth, handleSessionExpired } from "@/lib/api/client";
+import { buildApiUrl } from "@/lib/api/config";
 import type { ApiFailure, ApiResponse } from "@/lib/api/types";
-
-function buildAuthHeaders(token: string, extra?: HeadersInit): HeadersInit {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-  };
-  if (isNgrokBackend()) {
-    headers["ngrok-skip-browser-warning"] = "true";
-  }
-  return { ...headers, ...(extra as Record<string, string> | undefined) };
-}
 
 function parseContentDispositionFilename(header: string | null): string | null {
   if (!header) return null;
@@ -59,11 +49,9 @@ export async function downloadStockCargaMasivaPlantillaWithApi(
   const url = buildApiUrl("/api/v1/carga-masiva/stock/plantilla");
   let response: Response;
   try {
-    response = await fetch(url, {
-      method: "GET",
-      headers: buildAuthHeaders(token),
-    });
+    response = await fetchWithBearerAuth(url, token, { method: "GET" });
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     const message =
       error instanceof Error && error.message === "Failed to fetch"
         ? "No se pudo conectar con el servidor para descargar la planilla."
@@ -160,12 +148,12 @@ export async function uploadStockCargaMasivaWithApi(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchWithBearerAuth(url, token, {
       method: "POST",
-      headers: buildAuthHeaders(token),
       body: formData,
     });
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     const message =
       error instanceof Error && error.message === "Failed to fetch"
         ? "No se pudo conectar con el servidor para procesar la planilla."
