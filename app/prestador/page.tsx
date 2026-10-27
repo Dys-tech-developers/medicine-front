@@ -23,6 +23,7 @@ import {
   createVisitaWithApi,
   finalizarVisitaWithApi,
   getVisitaByIdWithApi,
+  getVisitaPendienteWithApi,
   iniciarVisitaWithApi,
   relevarVisitaWithApi,
 } from "@/lib/api/visitas";
@@ -48,6 +49,13 @@ import {
   type PrestadorVisitaInsumoLine,
 } from "@/lib/prestador-visita-insumos";
 import {
+  clearPrestadorVisitaEnCursoDraft,
+  draftTieneVisitaActiva,
+  loadPrestadorVisitaEnCursoDraft,
+  savePrestadorVisitaEnCursoDraft,
+  type PrestadorVisitaEnCursoDraft,
+} from "@/lib/prestador-visita-en-curso-storage";
+import {
   buildCreateVisitaBodyFromRegistro,
   buildServiciosActivosParaPrestador,
   getPrestadorAccesoDenegadoRazon,
@@ -66,7 +74,7 @@ import {
   validatePrestadorVisitaRelevoForm,
 } from "@/lib/prestador-visitas";
 import { extractCodigoQrFromScan } from "@/lib/patient-qr";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera,
   ClipboardList,
@@ -153,6 +161,14 @@ export default function PrestadorDashboardPage() {
 
   const { toasts, showToast } = useToast(3500);
 
+  /** Borrador a reaplicar tras re-escanear el QR (restore post-remount). */
+  const pendingRestoreRef = useRef<PrestadorVisitaEnCursoDraft | null>(null);
+  const restoreAttemptedRef = useRef(false);
+  const visitaEnCursoIdRef = useRef<number | null>(null);
+  const pacienteServicioIdRef = useRef<number | "">(pacienteServicioId);
+  visitaEnCursoIdRef.current = visitaEnCursoId;
+  pacienteServicioIdRef.current = pacienteServicioId;
+
   const insumosCatalogEnabled = Boolean(session?.accessToken && scannedPatient && !savedVisita);
   const {
     items: insumosCatalog,
@@ -197,8 +213,16 @@ export default function PrestadorDashboardPage() {
     prestadorPerfil?.id ?? 0
   );
 
+  /**
+   * Hidrata visita pendiente del QR/backend.
+   * Con `preserveLocal`, no borra una visita ya iniciada en esta sesión
+   * (evita que un refresh de disponibilidad “cierre” la UI al volver de background).
+   */
   const syncVisitaEnCursoFromServicio = useCallback(
-    (servicio: PacienteServicioAsignadoQrDto | undefined) => {
+    (
+      servicio: PacienteServicioAsignadoQrDto | undefined,
+      options?: { preserveLocal?: boolean }
+    ) => {
       if (servicio?.modoRelevo) {
         setVisitaEnCursoId(null);
         setVisitaEnCursoInicioMs(null);
@@ -210,6 +234,7 @@ export default function PrestadorDashboardPage() {
         setVisitaEnCursoInicioMs(Number.isFinite(inicioMs) ? inicioMs : null);
         return;
       }
+      if (options?.preserveLocal) return;
       setVisitaEnCursoId(null);
       setVisitaEnCursoInicioMs(null);
     },
@@ -217,6 +242,7 @@ export default function PrestadorDashboardPage() {
   );
 
   const clearPatientAndForm = useCallback(() => {
+    clearPrestadorVisitaEnCursoDraft();
     setScannedPatient(null);
     setScanError("");
     setFormError("");
@@ -236,16 +262,13 @@ export default function PrestadorDashboardPage() {
     setIsIniciando(false);
   }, []);
 
+  // Solo hidratar desde visitaPendiente del servicio; nunca pisar una visita local.
   useEffect(() => {
-    if (pacienteServicioId === "") {
-      setVisitaEnCursoId(null);
-      setVisitaEnCursoInicioMs(null);
-      return;
-    }
+    if (pacienteServicioId === "") return;
     const servicio = serviciosConDisponibilidad.find(
       (s) => s.pacienteServicioId === pacienteServicioId
     );
-    syncVisitaEnCursoFromServicio(servicio);
+    syncVisitaEnCursoFromServicio(servicio, { preserveLocal: true });
   }, [pacienteServicioId, serviciosConDisponibilidad, syncVisitaEnCursoFromServicio]);
 
   useEffect(() => {
@@ -274,6 +297,81 @@ export default function PrestadorDashboardPage() {
       cancelled = true;
     };
   }, [pacienteServicioId, session?.accessToken, scannedPatient, serviciosActivos]);
+
+  // Persistir visita/timer en curso para sobrevivir a remounts en mobile.
+  useEffect(() => {
+    if (!scannedPatient || savedVisita || pacienteServicioId === "") return;
+    if (visitaEnCursoId == null && visitaInicioMs == null) return;
+
+    savePrestadorVisitaEnCursoDraft({
+      codigoQr: scannedPatient.codigoQr,
+      pacienteId: scannedPatient.pacienteId,
+      pacienteServicioId: pacienteServicioId as number,
+      visitaEnCursoId,
+      visitaEnCursoInicioMs,
+      visitaInicioMs,
+      observaciones,
+    });
+  }, [
+    scannedPatient,
+    savedVisita,
+    pacienteServicioId,
+    visitaEnCursoId,
+    visitaEnCursoInicioMs,
+    visitaInicioMs,
+    observaciones,
+  ]);
+
+  // Al volver de background: revalidar visita de control horario.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      const token = session?.accessToken;
+      const visitaId = visitaEnCursoIdRef.current;
+      const psId = pacienteServicioIdRef.current;
+      if (!token || visitaId == null || psId === "") return;
+
+      void getVisitaPendienteWithApi(token, psId)
+        .then((pendiente) => {
+          const sigue =
+            pendiente.tieneVisitaPendiente &&
+            pendiente.visita != null &&
+            pendiente.visita.id === visitaId;
+
+          if (sigue && pendiente.visita) {
+            const inicioMs = new Date(pendiente.visita.fechaInicio).getTime();
+            setVisitaEnCursoId(pendiente.visita.id);
+            setVisitaEnCursoInicioMs(Number.isFinite(inicioMs) ? inicioMs : null);
+            return;
+          }
+
+          clearPrestadorVisitaEnCursoDraft();
+          setVisitaEnCursoId(null);
+          setVisitaEnCursoInicioMs(null);
+          setScannedPatient((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              servicios: prev.servicios.map((s) => {
+                if (s.pacienteServicioId !== psId) return s;
+                const { visitaPendiente: _removed, ...rest } = s;
+                return rest;
+              }),
+            };
+          });
+          showToast(
+            "La visita se cerró mientras estabas fuera (posible cierre automático por horas).",
+            "error"
+          );
+        })
+        .catch(() => {
+          /* sin red: conservar estado local */
+        });
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [session?.accessToken, showToast]);
 
   const applyQrPayload = useCallback(
     (raw: string) => {
@@ -351,25 +449,76 @@ export default function PrestadorDashboardPage() {
             servicios: serviciosFiltrados,
           };
 
-          setScannedPatient(patient);
-          const inicioMs = Date.now();
-          if (serviciosFiltrados.length === 1) {
-            const unico = serviciosFiltrados[0];
-            setPacienteServicioId(unico.pacienteServicioId);
-            if (unico.modoRelevo) {
-              setVisitaInicioMs(null);
-              syncVisitaEnCursoFromServicio(unico);
-            } else if (unico.controlHorario) {
-              setVisitaInicioMs(null);
-              syncVisitaEnCursoFromServicio(unico);
+          const draft = pendingRestoreRef.current;
+          pendingRestoreRef.current = null;
+          const restoring =
+            draft != null &&
+            draftTieneVisitaActiva(draft) &&
+            draft.pacienteId === patient.pacienteId;
+
+          let patientToSet = patient;
+          if (restoring && draft.visitaEnCursoId != null) {
+            patientToSet = {
+              ...patient,
+              servicios: patient.servicios.map((s) =>
+                s.pacienteServicioId === draft.pacienteServicioId
+                  ? {
+                      ...s,
+                      visitaPendiente: {
+                        id: draft.visitaEnCursoId as number,
+                        fechaInicio: new Date(
+                          draft.visitaEnCursoInicioMs ?? Date.now()
+                        ).toISOString(),
+                      },
+                    }
+                  : s
+              ),
+            };
+          }
+
+          setScannedPatient(patientToSet);
+
+          if (restoring && draft) {
+            setPacienteServicioId(draft.pacienteServicioId);
+            setObservaciones(draft.observaciones);
+            setVisitaInicioMs(draft.visitaInicioMs);
+            const servicioDraft = patientToSet.servicios.find(
+              (s) => s.pacienteServicioId === draft.pacienteServicioId
+            );
+            if (servicioDraft?.modoRelevo) {
+              setVisitaEnCursoId(null);
+              setVisitaEnCursoInicioMs(null);
+            } else if (draft.visitaEnCursoId != null) {
+              setVisitaEnCursoId(draft.visitaEnCursoId);
+              setVisitaEnCursoInicioMs(draft.visitaEnCursoInicioMs);
+            } else if (servicioDraft?.controlHorario) {
+              syncVisitaEnCursoFromServicio(servicioDraft);
+            } else {
+              setVisitaEnCursoId(null);
+              setVisitaEnCursoInicioMs(null);
+            }
+            showToast(`Visita en curso restaurada · ${patient.fullName}`, "success");
+          } else {
+            const inicioMs = Date.now();
+            if (serviciosFiltrados.length === 1) {
+              const unico = serviciosFiltrados[0];
+              setPacienteServicioId(unico.pacienteServicioId);
+              if (unico.modoRelevo) {
+                setVisitaInicioMs(null);
+                syncVisitaEnCursoFromServicio(unico);
+              } else if (unico.controlHorario) {
+                setVisitaInicioMs(null);
+                syncVisitaEnCursoFromServicio(unico);
+              } else {
+                setVisitaInicioMs(inicioMs);
+              }
             } else {
               setVisitaInicioMs(inicioMs);
             }
-          } else {
-            setVisitaInicioMs(inicioMs);
+            showToast(`Paciente identificado · ${patient.fullName}`, "success");
           }
-          showToast(`Paciente identificado · ${patient.fullName}`, "success");
         } catch (err) {
+          pendingRestoreRef.current = null;
           const msg =
             err instanceof ApiError
               ? getPrestadorQrErrorMessage(err)
@@ -383,6 +532,70 @@ export default function PrestadorDashboardPage() {
     },
     [session?.accessToken, showToast, prestadorPerfil, syncVisitaEnCursoFromServicio]
   );
+
+  const applyQrPayloadRef = useRef(applyQrPayload);
+  applyQrPayloadRef.current = applyQrPayload;
+
+  // Al montar: restaurar borrador re-escaneando el QR (si Chrome mató la pestaña).
+  useEffect(() => {
+    if (!session?.accessToken || restoreAttemptedRef.current) return;
+    restoreAttemptedRef.current = true;
+
+    const draft = loadPrestadorVisitaEnCursoDraft();
+    if (!draft || !draftTieneVisitaActiva(draft)) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        if (draft.visitaEnCursoId != null) {
+          const pendiente = await getVisitaPendienteWithApi(
+            session.accessToken,
+            draft.pacienteServicioId
+          );
+          if (cancelled) return;
+
+          const siguePendiente =
+            pendiente.tieneVisitaPendiente &&
+            pendiente.visita != null &&
+            pendiente.visita.id === draft.visitaEnCursoId;
+
+          if (!siguePendiente) {
+            clearPrestadorVisitaEnCursoDraft();
+            showToast(
+              "La visita en curso ya no está pendiente (puede haberse cerrado automáticamente).",
+              "error"
+            );
+            return;
+          }
+
+          const serverVisita = pendiente.visita;
+          pendingRestoreRef.current = {
+            ...draft,
+            visitaEnCursoId: serverVisita?.id ?? draft.visitaEnCursoId,
+            visitaEnCursoInicioMs: serverVisita?.fechaInicio
+              ? new Date(serverVisita.fechaInicio).getTime()
+              : draft.visitaEnCursoInicioMs,
+          };
+        } else {
+          pendingRestoreRef.current = draft;
+        }
+
+        if (!cancelled) {
+          applyQrPayloadRef.current(draft.codigoQr);
+        }
+      } catch {
+        if (!cancelled) {
+          pendingRestoreRef.current = draft;
+          applyQrPayloadRef.current(draft.codigoQr);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.accessToken, showToast]);
 
   const handlePacienteServicioIdChange = useCallback(
     (id: number | "") => {
@@ -469,6 +682,7 @@ export default function PrestadorDashboardPage() {
       setInsumoWarning(insumoWarningMsg);
       setSavedVisita(visitaFinal);
       setSavedVisitaEsRelevo(true);
+      clearPrestadorVisitaEnCursoDraft();
       if (!insumoWarningMsg) {
         showToast(
           resultado.huboRelevo ? "Relevo registrado" : "Cobertura iniciada",
@@ -518,9 +732,39 @@ export default function PrestadorDashboardPage() {
       const visita = await iniciarVisitaWithApi(token, {
         pacienteServicioId: pacienteServicioId as number,
       });
-      const inicioMs = new Date(visita.fechaInicio ?? visita.fecha).getTime();
+      const fechaInicio = visita.fechaInicio ?? visita.fecha;
+      const inicioMs = new Date(fechaInicio).getTime();
+      const inicioMsSafe = Number.isFinite(inicioMs) ? inicioMs : Date.now();
       setVisitaEnCursoId(visita.id);
-      setVisitaEnCursoInicioMs(Number.isFinite(inicioMs) ? inicioMs : Date.now());
+      setVisitaEnCursoInicioMs(inicioMsSafe);
+      setScannedPatient((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          servicios: prev.servicios.map((s) =>
+            s.pacienteServicioId === pacienteServicioId
+              ? {
+                  ...s,
+                  visitaPendiente: {
+                    id: visita.id,
+                    fechaInicio: fechaInicio || new Date(inicioMsSafe).toISOString(),
+                  },
+                }
+              : s
+          ),
+        };
+      });
+      if (scannedPatient) {
+        savePrestadorVisitaEnCursoDraft({
+          codigoQr: scannedPatient.codigoQr,
+          pacienteId: scannedPatient.pacienteId,
+          pacienteServicioId: pacienteServicioId as number,
+          visitaEnCursoId: visita.id,
+          visitaEnCursoInicioMs: inicioMsSafe,
+          visitaInicioMs: null,
+          observaciones,
+        });
+      }
       showToast("Visita iniciada", "success");
     } catch (err) {
       const msg =
@@ -639,6 +883,7 @@ export default function PrestadorDashboardPage() {
       setInsumoWarning(insumoWarningMsg);
       setSavedVisita(visita);
       setSavedVisitaEsRelevo(false);
+      clearPrestadorVisitaEnCursoDraft();
       if (!insumoWarningMsg) {
         showToast("Visita registrada correctamente", "success");
       }
